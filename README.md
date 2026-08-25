@@ -100,7 +100,7 @@ Use the managed artifact deployment. It supplies service routing and environment
 ### Passed
 
 - `pnpm verify` completed successfully: formatter gate, ESLint, workspace typechecking, Vitest, API production build, and web production build.
-- Automated tests passed: 14 API tests cover phone normalization, roster occupancy, direct-score status policy, the public health endpoint, and unauthenticated API rejection; 4 web tests cover US-phone normalization, resend cooldown behavior, and preserving a game's existing court during schedule editing without sending SMS.
+- Automated tests passed: 22 API tests cover phone normalization, roster occupancy, role-aware workflow policy, score lifecycle/audit rules, schedule conflict and visibility rules, standings calculations, mocked Clerk identity gates, the public health endpoint, and unauthenticated API rejection; 4 web tests cover US-phone normalization, resend cooldown behavior, and preserving a game's existing court during schedule editing without sending SMS.
 - Development API and web workflows restarted cleanly after the final build. The API is listening and `/api/healthz` is publicly available.
 - Mobile browser verification passed at a 390px viewport: the signed-out app displays only US phone/SMS access, has no email/password/username/social controls, gives a local invalid-phone error, does not clip primary controls, and has no runtime console errors.
 - The web UI uses server-derived roles and permissions for commissioner, captain, and player affordances; roster capacity uses active memberships plus pending unexpired invitations; invitation tokens survive the signed-out sign-in boundary.

@@ -23,6 +23,7 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { scheduleFormForEdit } from "./schedule-form";
+import { courtUpdatePayload, venueUpdatePayload } from "./venue-court-editor";
 
 function message(error: unknown) {
   if (typeof error === "object" && error) {
@@ -53,6 +54,8 @@ export function CommissionerScheduleAdmin() {
   const [venueName, setVenueName] = useState("");
   const [venueAddress, setVenueAddress] = useState("");
   const [courtName, setCourtName] = useState("");
+  const [editingVenue, setEditingVenue] = useState<{ id: number; name: string; address: string }>();
+  const [editingCourt, setEditingCourt] = useState<{ id: number; name: string }>();
   const [editingGame, setEditingGame] = useState<Game>();
   const [form, setForm] = useState({ homeTeamId: "", awayTeamId: "", venueId: "", courtId: "", scheduledAt: "" });
 
@@ -104,6 +107,22 @@ export function CommissionerScheduleAdmin() {
     });
   };
 
+  const saveVenueEdit = (event: FormEvent) => {
+    event.preventDefault();
+    if (!editingVenue || !editingVenue.name.trim()) return;
+    updateVenue.mutate(venueUpdatePayload(editingVenue), {
+      onSuccess: () => { setEditingVenue(undefined); refreshSchedule(); },
+    });
+  };
+
+  const saveCourtEdit = (event: FormEvent) => {
+    event.preventDefault();
+    if (!editingCourt || !editingCourt.name.trim()) return;
+    updateCourt.mutate(courtUpdatePayload(editingCourt), {
+      onSuccess: () => { setEditingCourt(undefined); refreshSchedule(); },
+    });
+  };
+
   const startEdit = (game: Game) => {
     setSelectedVenueId(game.venueId);
     setEditingGame(game);
@@ -149,15 +168,14 @@ export function CommissionerScheduleAdmin() {
           <button className={subtleButton} type="submit" disabled={createVenue.isPending}>Add venue</button>
         </form>
         <div className="mt-4 space-y-2">
-          {venueList.map((venue) => <div key={venue.id} className="flex items-center gap-2 rounded-xl border border-[hsl(var(--border))] p-3">
-            <button type="button" onClick={() => setSelectedVenueId(venue.id)} className="min-w-0 flex-1 text-left"><p className="truncate text-sm font-bold">{venue.name}</p><p className="truncate text-xs text-[hsl(var(--muted-foreground))]">{venue.address || "No address"}</p></button>
-            <button type="button" onClick={() => updateVenue.mutate({ venueId: venue.id, data: { active: !venue.active } }, { onSuccess: refreshSchedule })} className={subtleButton}>{venue.active ? "Deactivate" : "Activate"}</button>
+          {venueList.map((venue) => <div key={venue.id} className="rounded-xl border border-[hsl(var(--border))] p-3">
+            {editingVenue?.id === venue.id ? <form onSubmit={saveVenueEdit} className="grid gap-2 sm:grid-cols-2"><input aria-label="Edit venue name" value={editingVenue.name} onChange={(event) => setEditingVenue({ ...editingVenue, name: event.target.value })} className={fieldClass.replace("mt-1 ", "")} /><input aria-label="Edit venue address" value={editingVenue.address} onChange={(event) => setEditingVenue({ ...editingVenue, address: event.target.value })} className={fieldClass.replace("mt-1 ", "")} /><div className="flex gap-2"><button className={subtleButton} type="submit" disabled={updateVenue.isPending}>Save venue</button><button className={subtleButton} type="button" onClick={() => setEditingVenue(undefined)}>Cancel</button></div></form> : <div className="flex items-center gap-2"><button type="button" onClick={() => setSelectedVenueId(venue.id)} className="min-w-0 flex-1 text-left"><p className="truncate text-sm font-bold">{venue.name}</p><p className="truncate text-xs text-[hsl(var(--muted-foreground))]">{venue.address || "No address"}</p></button><button type="button" onClick={() => setEditingVenue({ id: venue.id, name: venue.name, address: venue.address ?? "" })} className={subtleButton}>Edit</button><button type="button" onClick={() => updateVenue.mutate({ venueId: venue.id, data: { active: !venue.active } }, { onSuccess: refreshSchedule })} className={subtleButton}>{venue.active ? "Deactivate" : "Activate"}</button></div>}
           </div>)}
         </div>
         {selectedVenueId && <div className="mt-5 border-t border-[hsl(var(--border))] pt-4">
           <p className="text-sm font-bold">Courts for {venueList.find((venue) => venue.id === selectedVenueId)?.name ?? "venue"}</p>
           <form onSubmit={saveCourt} className="mt-2 flex gap-2"><input value={courtName} onChange={(event) => setCourtName(event.target.value)} className={fieldClass.replace("mt-1 ", "")} placeholder="Court 1" /><button className={subtleButton} type="submit" disabled={createCourt.isPending}>Add court</button></form>
-          <div className="mt-3 space-y-2">{courtList.map((court) => <div key={court.id} className="flex items-center justify-between rounded-lg bg-[hsl(var(--muted)/.6)] p-2.5 text-sm"><span>{court.name}</span><button type="button" onClick={() => updateCourt.mutate({ courtId: court.id, data: { active: !court.active } }, { onSuccess: refreshSchedule })} className="text-xs font-bold text-[hsl(var(--primary))]">{court.active ? "Deactivate" : "Activate"}</button></div>)}</div>
+          <div className="mt-3 space-y-2">{courtList.map((court) => <div key={court.id} className="rounded-lg bg-[hsl(var(--muted)/.6)] p-2.5 text-sm">{editingCourt?.id === court.id ? <form onSubmit={saveCourtEdit} className="flex flex-wrap gap-2"><input aria-label="Edit court name" value={editingCourt.name} onChange={(event) => setEditingCourt({ ...editingCourt, name: event.target.value })} className={fieldClass.replace("mt-1 ", "")} /><button className={subtleButton} type="submit" disabled={updateCourt.isPending}>Save court</button><button className={subtleButton} type="button" onClick={() => setEditingCourt(undefined)}>Cancel</button></form> : <div className="flex items-center justify-between gap-2"><span>{court.name}</span><div className="flex gap-2"><button type="button" onClick={() => setEditingCourt({ id: court.id, name: court.name })} className="text-xs font-bold text-[hsl(var(--primary))]">Edit</button><button type="button" onClick={() => updateCourt.mutate({ courtId: court.id, data: { active: !court.active } }, { onSuccess: refreshSchedule })} className="text-xs font-bold text-[hsl(var(--primary))]">{court.active ? "Deactivate" : "Activate"}</button></div></div>}</div>)}</div>
         </div>}
       </section>
       <section className="rounded-2xl bg-[hsl(var(--card))] p-4">

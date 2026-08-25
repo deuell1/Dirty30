@@ -1,3 +1,2 @@
 - [Dirty-30 preview API routing](dirty30-preview-api-routing.md) — the root Vite preview needs an explicit `/api` dev proxy to avoid serving HTML to typed API clients.
 - [Dirty-30 phone OTP prerequisite](dirty30-phone-otp-prerequisite.md) — Replit-managed Clerk currently lacks SMS phone auth; phone login needs a supported configured Clerk tenant before release.
-- [Dirty-30 GitHub publishing](dirty30-github-publishing.md) — local HTTPS push may be unavailable; use the attached GitHub connector REST proxy with non-force tree verification.
