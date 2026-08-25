@@ -1,0 +1,304 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.1.0
+  description: Dirty-30 league management API
+servers:
+  - url: /api
+tags:
+  - name: health
+  - name: dashboard
+  - name: teams
+  - name: schedule
+  - name: standings
+  - name: scores
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [dashboard]
+      summary: Get role-aware dashboard summary
+      responses:
+        "200":
+          description: Dashboard
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dashboard"
+  /teams:
+    get:
+      operationId: listTeams
+      tags: [teams]
+      summary: List league teams
+      responses:
+        "200":
+          description: Teams
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Team"
+    post:
+      operationId: createTeam
+      tags: [teams]
+      summary: Create a team
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TeamInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
+  /teams/{teamId}:
+    get:
+      operationId: getTeam
+      tags: [teams]
+      parameters:
+        - $ref: "#/components/parameters/TeamId"
+      responses:
+        "200":
+          description: Team
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
+    patch:
+      operationId: updateTeam
+      tags: [teams]
+      parameters:
+        - $ref: "#/components/parameters/TeamId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TeamUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
+  /teams/{teamId}/roster:
+    get:
+      operationId: getTeamRoster
+      tags: [teams]
+      parameters:
+        - $ref: "#/components/parameters/TeamId"
+      responses:
+        "200":
+          description: Roster
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Player"
+  /schedule:
+    get:
+      operationId: listGames
+      tags: [schedule]
+      parameters:
+        - name: teamId
+          in: query
+          schema: { type: integer }
+        - name: date
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Games
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Game"
+  /schedule/{gameId}:
+    get:
+      operationId: getGame
+      tags: [schedule]
+      parameters:
+        - $ref: "#/components/parameters/GameId"
+      responses:
+        "200":
+          description: Game
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Game"
+  /standings:
+    get:
+      operationId: getStandings
+      tags: [standings]
+      responses:
+        "200":
+          description: Standings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Standing"
+  /scores/{gameId}:
+    post:
+      operationId: submitScore
+      tags: [scores]
+      parameters:
+        - $ref: "#/components/parameters/GameId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScoreInput"
+      responses:
+        "200":
+          description: Score
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Score"
+  /scores/review:
+    get:
+      operationId: getScoreReviewQueue
+      tags: [scores]
+      responses:
+        "200":
+          description: Scores needing commissioner attention
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Game"
+components:
+  parameters:
+    TeamId:
+      name: teamId
+      in: path
+      required: true
+      schema: { type: integer }
+    GameId:
+      name: gameId
+      in: path
+      required: true
+      schema: { type: integer }
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status: { type: string }
+      required: [status]
+    Dashboard:
+      type: object
+      required: [leagueName, seasonName, role, nextGame, attentionItems, recentResults]
+      properties:
+        leagueName: { type: string }
+        seasonName: { type: string }
+        role: { type: string, enum: [COMMISSIONER, CAPTAIN, PLAYER] }
+        nextGame:
+          anyOf:
+            - $ref: "#/components/schemas/Game"
+            - type: "null"
+        attentionItems:
+          type: array
+          items: { type: string }
+        recentResults:
+          type: array
+          items:
+            $ref: "#/components/schemas/Game"
+    Team:
+      type: object
+      required: [id, name, captainName, playerCount, active]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        captainName: { type: string }
+        playerCount: { type: integer }
+        active: { type: boolean }
+    TeamInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
+        captainId: { type: ["integer", "null"] }
+    TeamUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        captainId: { type: ["integer", "null"] }
+        active: { type: boolean }
+    Player:
+      type: object
+      required: [id, firstName, lastName, email, phone, status]
+      properties:
+        id: { type: integer }
+        firstName: { type: string }
+        lastName: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string }
+        status: { type: string, enum: [ACTIVE, PENDING] }
+    Game:
+      type: object
+      required: [id, date, startTime, venue, court, homeTeam, awayTeam, status, published]
+      properties:
+        id: { type: integer }
+        date: { type: string }
+        startTime: { type: string }
+        venue: { type: string }
+        court: { type: string }
+        homeTeam: { type: string }
+        awayTeam: { type: string }
+        homeTeamId: { type: integer }
+        awayTeamId: { type: integer }
+        status: { type: string, enum: [SCHEDULED, CANCELLED, FINAL, PENDING_CONFIRMATION, DISPUTED] }
+        published: { type: boolean }
+        homeScore: { type: ["integer", "null"] }
+        awayScore: { type: ["integer", "null"] }
+    ScoreInput:
+      type: object
+      required: [homeScore, awayScore]
+      properties:
+        homeScore: { type: integer, minimum: 0 }
+        awayScore: { type: integer, minimum: 0 }
+    Score:
+      type: object
+      required: [gameId, homeScore, awayScore, status]
+      properties:
+        gameId: { type: integer }
+        homeScore: { type: integer }
+        awayScore: { type: integer }
+        status: { type: string, enum: [NOT_SUBMITTED, PENDING_CONFIRMATION, DISPUTED, FINAL] }
+    Standing:
+      type: object
+      required: [rank, teamName, played, wins, losses, pointsFor, pointsAgainst, differential]
+      properties:
+        rank: { type: integer }
+        teamName: { type: string }
+        played: { type: integer }
+        wins: { type: integer }
+        losses: { type: integer }
+        pointsFor: { type: integer }
+        pointsAgainst: { type: integer }
+        differential: { type: integer }

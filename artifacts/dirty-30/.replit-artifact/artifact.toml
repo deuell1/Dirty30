@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Dirty-30"
+description = "A mobile-first league management app for one adult recreational beer league, covering teams, rosters, schedules, scores, standings, and commissioner operations."
+version = "1.0.0"
+id = "artifacts/dirty-30"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 25402
+
+[services.development]
+run = "pnpm --filter @workspace/dirty-30 run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/dirty-30", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/dirty-30/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25402"
+BASE_PATH = "/"
