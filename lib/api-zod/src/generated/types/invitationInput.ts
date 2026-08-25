@@ -7,5 +7,6 @@
  */
 
 export interface InvitationInput {
-  email: string;
+  /** @pattern ^\+[1-9]\d{1,14}$ */
+  phone: string;
 }

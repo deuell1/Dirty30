@@ -6,13 +6,13 @@ async function firstOrCreate<T extends { id: number }>(find: () => Promise<T | u
   return (await find()) ?? create();
 }
 
-async function seedUser(externalAuthId: string, email: string, firstName: string, lastName: string, role: "COMMISSIONER" | "CAPTAIN" | "PLAYER") {
-  const existing = await db.query.users.findFirst({ where: or(eq(users.email, email), eq(users.externalAuthId, externalAuthId)) });
+async function seedUser(externalAuthId: string, phone: string, firstName: string, lastName: string, role: "COMMISSIONER" | "CAPTAIN" | "PLAYER") {
+  const existing = await db.query.users.findFirst({ where: or(eq(users.phone, phone), eq(users.externalAuthId, externalAuthId)) });
   if (existing) {
-    const [updated] = await db.update(users).set({ email, firstName, lastName, role }).where(eq(users.id, existing.id)).returning();
+    const [updated] = await db.update(users).set({ phone, firstName, lastName, role }).where(eq(users.id, existing.id)).returning();
     return updated!;
   }
-  return (await db.insert(users).values({ externalAuthId, email, firstName, lastName, role }).returning())[0]!;
+  return (await db.insert(users).values({ externalAuthId, phone, firstName, lastName, role }).returning())[0]!;
 }
 
 async function seedMembership(teamId: number, userId: number, membershipRole: "CAPTAIN" | "PLAYER") {
@@ -29,7 +29,7 @@ async function seed() {
     () => db.query.seasons.findFirst({ where: and(eq(seasons.leagueId, league.id), eq(seasons.name, "Summer 2026")) }),
     async () => (await db.insert(seasons).values({ leagueId: league.id, name: "Summer 2026", startDate: "2026-06-01", endDate: "2026-09-30" }).returning())[0]!,
   );
-  await seedUser("seed_commissioner", "commissioner@dirty30.example.com", "Jordan", "Miles", "COMMISSIONER");
+  await seedUser("seed_commissioner", "+12025550100", "Jordan", "Miles", "COMMISSIONER");
   const venue = await firstOrCreate(
     () => db.query.venues.findFirst({ where: and(eq(venues.leagueId, league.id), eq(venues.name, "Lakeside Sports Center")) }),
     async () => (await db.insert(venues).values({ leagueId: league.id, name: "Lakeside Sports Center", address: "Chicago, IL" }).returning())[0]!,
@@ -44,14 +44,16 @@ async function seed() {
   );
 
   const captainData = [
-    ["seed_casey", "casey@dirty30.local", "Casey", "Morgan", "Hops & Dreams"],
-    ["seed_jordan_captain", "jordan.captain@dirty30.local", "Jordan", "Lee", "Pitch Please"],
-    ["seed_sam", "sam@dirty30.local", "Sam", "Rivera", "Ale Stars"],
-    ["seed_taylor", "taylor@dirty30.local", "Taylor", "Brooks", "The Keg Stands"],
+    ["seed_casey", "+12025550101", "Casey", "Morgan", "Hops & Dreams"],
+    ["seed_jordan_captain", "+12025550102", "Jordan", "Lee", "Pitch Please"],
+    ["seed_sam", "+12025550103", "Sam", "Rivera", "Ale Stars"],
+    ["seed_taylor", "+12025550104", "Taylor", "Brooks", "The Keg Stands"],
   ] as const;
   const seededTeams: Array<typeof teams.$inferSelect> = [];
-  for (const [externalAuthId, email, firstName, lastName, teamName] of captainData) {
-    const captain = await seedUser(externalAuthId, email, firstName, lastName, "CAPTAIN");
+  const captains = new Map<string, typeof users.$inferSelect>();
+  for (const [externalAuthId, phone, firstName, lastName, teamName] of captainData) {
+    const captain = await seedUser(externalAuthId, phone, firstName, lastName, "CAPTAIN");
+    captains.set(externalAuthId, captain);
     const team = await firstOrCreate(
       () => db.query.teams.findFirst({ where: and(eq(teams.seasonId, season.id), eq(teams.name, teamName)) }),
       async () => (await db.insert(teams).values({ seasonId: season.id, name: teamName }).returning())[0]!,
@@ -63,19 +65,22 @@ async function seed() {
   const hops = seededTeams[0]!;
   for (const [index, name] of ["Maya Patel", "Drew Young", "Alex Chen", "Robin Diaz", "Morgan Tate", "Avery Bell"].entries()) {
     const [firstName, lastName] = name.split(" ");
-    const player = await seedUser(`seed_hops_${index}`, `${firstName.toLowerCase()}@dirty30.local`, firstName!, lastName!, "PLAYER");
+    const player = await seedUser(`seed_hops_${index}`, `+120255501${10 + index}`, firstName!, lastName!, "PLAYER");
     await seedMembership(hops.id, player.id, "PLAYER");
   }
   for (const [teamIndex, name] of ["Riley Park", "Cameron Fox", "Quinn Stone"].entries()) {
     const [firstName, lastName] = name.split(" ");
-    const player = await seedUser(`seed_player_${teamIndex}`, `${firstName.toLowerCase()}@dirty30.local`, firstName!, lastName!, "PLAYER");
+    const player = await seedUser(`seed_player_${teamIndex}`, `+120255501${20 + teamIndex}`, firstName!, lastName!, "PLAYER");
     await seedMembership(seededTeams[teamIndex + 1]!.id, player.id, "PLAYER");
   }
-  const pendingEmail = "invitee@dirty30.local";
-  const existingInvite = await db.query.playerInvitations.findFirst({ where: and(eq(playerInvitations.teamId, hops.id), eq(playerInvitations.invitedEmail, pendingEmail), eq(playerInvitations.status, "PENDING")) });
+  const pendingPhone = "+12025550199";
+  const seedInvitationTokenHash = "development-seed-invitation-token-hash";
+  const existingInvite = await db.query.playerInvitations.findFirst({ where: and(eq(playerInvitations.teamId, hops.id), eq(playerInvitations.status, "PENDING"), or(eq(playerInvitations.invitedPhone, pendingPhone), eq(playerInvitations.tokenHash, seedInvitationTokenHash))) });
   if (!existingInvite) {
-    const captain = await db.query.users.findFirst({ where: eq(users.email, "casey@dirty30.local") });
-    await db.insert(playerInvitations).values({ teamId: hops.id, invitedEmail: pendingEmail, invitedByUserId: captain!.id, tokenHash: "development-seed-invitation-token-hash", expiresAt: new Date(Date.now() + 7 * 86400000) });
+    const captain = captains.get("seed_casey");
+    await db.insert(playerInvitations).values({ teamId: hops.id, invitedPhone: pendingPhone, invitedByUserId: captain!.id, tokenHash: seedInvitationTokenHash, expiresAt: new Date(Date.now() + 7 * 86400000) });
+  } else if (existingInvite.invitedPhone !== pendingPhone) {
+    await db.update(playerInvitations).set({ invitedPhone: pendingPhone }).where(eq(playerInvitations.id, existingInvite.id));
   }
 
   const gameRows = [

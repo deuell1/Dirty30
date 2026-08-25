@@ -16,6 +16,7 @@ import {
 } from "@workspace/db";
 import { currentUser, requireCommissioner, resolveCurrentUser } from "../middlewares/auth";
 import { lockRoster, MAX_ROSTER_POSITIONS, requireRosterSlot } from "../services/rosterCapacity";
+import { normalizeUsPhone } from "../lib/phone";
 
 type ApiGame = {
   id: number; date: string; startTime: string; venue: string; court: string;
@@ -33,9 +34,9 @@ const scheduleInput = z.object({
   venueId: z.number().int().positive(), courtId: z.number().int().positive(),
   scheduledAt: z.string().datetime(),
 });
-const inviteInput = z.object({ email: z.string().email() });
+const inviteInput = z.object({ phone: z.string().trim().min(1).max(40) });
 const disputeInput = z.object({ reason: z.string().trim().min(3).max(1000) });
-const profileInput = z.object({ firstName: z.string().trim().min(1).max(100), lastName: z.string().trim().min(1).max(100), phone: z.string().trim().max(40).nullable().optional() });
+const profileInput = z.object({ firstName: z.string().trim().min(1).max(100), lastName: z.string().trim().min(1).max(100) });
 const captainInput = z.object({ userId: z.number().int().positive() });
 const venueInput = z.object({ name: z.string().trim().min(1).max(160), address: z.string().trim().max(1000).default("") });
 const courtInput = z.object({ name: z.string().trim().min(1).max(100) });
@@ -154,7 +155,7 @@ router.get("/dashboard", async (_req, res, next) => {
 });
 router.get("/me", (req, res) => {
   const user = currentUser(req, res);
-  res.json({ id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, phone: user.phone, role: user.role });
+  res.json({ id: user.id, email: user.email ?? undefined, firstName: user.firstName, lastName: user.lastName, phone: user.phone, role: user.role });
 });
 router.patch("/me", async (req, res, next) => {
   try {
@@ -162,7 +163,7 @@ router.patch("/me", async (req, res, next) => {
     const input = profileInput.parse(req.body);
     const [updated] = await db.update(users).set(input).where(eq(users.id, user.id)).returning();
     await audit(user.id, "user", user.id, "PROFILE_UPDATED", user, updated);
-    return res.json(updated);
+    return res.json({ id: updated!.id, email: updated!.email ?? undefined, firstName: updated!.firstName, lastName: updated!.lastName, phone: updated!.phone, role: updated!.role });
   } catch (error) { return next(error); }
 });
 router.get("/teams", async (_req, res, next) => { try { res.json(ListTeamsResponse.parse(await teamList())); } catch (error) { next(error); } });
@@ -174,7 +175,21 @@ router.patch("/teams/:teamId", requireCommissioner, async (req, res, next) => {
   try { const { teamId } = UpdateTeamParams.parse(req.params); const input = UpdateTeamBody.parse(req.body); const before = await db.query.teams.findFirst({ where: eq(teams.id, teamId) }); if (!before) return res.status(404).json({ error: "Team not found" }); await db.update(teams).set(input).where(eq(teams.id, teamId)); const after = await db.query.teams.findFirst({ where: eq(teams.id, teamId) }); await audit(currentUser(req, res).id, "team", teamId, "UPDATED", before, after); return res.json(UpdateTeamResponse.parse((await teamList()).find((item) => item.id === teamId))); } catch (error) { return next(error); }
 });
 router.get("/teams/:teamId/roster", async (req, res, next) => {
-  try { const { teamId } = GetTeamRosterParams.parse(req.params); const team = await db.query.teams.findFirst({ where: eq(teams.id, teamId) }); if (!team) return res.status(404).json({ error: "Team not found" }); const memberships = await db.select({ membership: teamMemberships, user: users }).from(teamMemberships).innerJoin(users, eq(teamMemberships.userId, users.id)).where(and(eq(teamMemberships.teamId, teamId), eq(teamMemberships.active, true))); const pending = await db.select().from(playerInvitations).where(and(eq(playerInvitations.teamId, teamId), eq(playerInvitations.status, "PENDING"))); return res.json(GetTeamRosterResponse.parse([...memberships.map(({ user }) => ({ id: user.id, firstName: user.firstName, lastName: user.lastName, email: user.email, phone: user.phone ?? "", status: "ACTIVE" })), ...pending.map((invite) => ({ id: -invite.id, firstName: "Invited", lastName: "Player", email: invite.invitedEmail, phone: "", status: "PENDING" }))])); } catch (error) { return next(error); }
+  try {
+    const { teamId } = GetTeamRosterParams.parse(req.params);
+    const team = await db.query.teams.findFirst({ where: eq(teams.id, teamId) });
+    if (!team) return res.status(404).json({ error: "Team not found" });
+    const viewer = currentUser(req, res);
+    const canViewPhone = viewer.role === "COMMISSIONER" || Boolean(await db.query.teamMemberships.findFirst({
+      where: and(eq(teamMemberships.teamId, teamId), eq(teamMemberships.userId, viewer.id), eq(teamMemberships.membershipRole, "CAPTAIN"), eq(teamMemberships.active, true)),
+    }));
+    const memberships = await db.select({ membership: teamMemberships, user: users }).from(teamMemberships).innerJoin(users, eq(teamMemberships.userId, users.id)).where(and(eq(teamMemberships.teamId, teamId), eq(teamMemberships.active, true)));
+    const pending = canViewPhone ? await db.select().from(playerInvitations).where(and(eq(playerInvitations.teamId, teamId), eq(playerInvitations.status, "PENDING"))) : [];
+    return res.json(GetTeamRosterResponse.parse([
+      ...memberships.map(({ user }) => ({ id: user.id, firstName: user.firstName, lastName: user.lastName, phone: canViewPhone ? user.phone : undefined, status: "ACTIVE" })),
+      ...pending.map((invite) => ({ id: -invite.id, firstName: "Invited", lastName: "Player", phone: invite.invitedPhone, status: "PENDING" })),
+    ]));
+  } catch (error) { return next(error); }
 });
 router.patch("/teams/:teamId/captain", requireCommissioner, async (req, res, next) => {
   try {
@@ -198,19 +213,24 @@ router.post("/teams/:teamId/invitations", async (req, res, next) => {
   try {
     const teamId = z.coerce.number().int().positive().parse(req.params.teamId);
     const input = inviteInput.parse(req.body);
+    const invitedPhone = normalizeUsPhone(input.phone);
     const actor = currentUser(req, res);
     await assertCaptainOrCommissioner(actor.id, [teamId]);
     const token = randomBytes(24).toString("hex");
     const invite = await db.transaction(async (tx) => lockRoster(tx, teamId, async () => {
+      const existingPending = await tx.query.playerInvitations.findFirst({
+        where: and(eq(playerInvitations.teamId, teamId), eq(playerInvitations.invitedPhone, invitedPhone), eq(playerInvitations.status, "PENDING")),
+      });
+      if (existingPending) throw Object.assign(new Error("A pending invitation already exists for this phone number"), { status: 409 });
       await requireRosterSlot(tx, teamId);
       const [created] = await tx.insert(playerInvitations).values({
-        teamId, invitedEmail: input.email.trim().toLowerCase(), invitedByUserId: actor.id,
+        teamId, invitedPhone, invitedByUserId: actor.id,
         tokenHash: createHash("sha256").update(token).digest("hex"),
         expiresAt: new Date(Date.now() + 7 * 86400000),
       }).returning();
       return created!;
     }));
-    await audit(actor.id, "invitation", invite.id, "CREATED", undefined, { teamId, email: input.email });
+    await audit(actor.id, "invitation", invite.id, "CREATED", undefined, { teamId, invitedPhone });
     return res.status(201).json({ id: invite.id, expiresAt: invite.expiresAt, token });
   } catch (error) { return next(error); }
 });
@@ -222,7 +242,7 @@ router.post("/invitations/:token/accept", async (req, res, next) => {
     const accepted = await db.transaction(async (tx) => {
       const invitation = await tx.query.playerInvitations.findFirst({ where: eq(playerInvitations.tokenHash, tokenHash) });
       if (!invitation || invitation.status !== "PENDING" || invitation.expiresAt <= new Date()) throw Object.assign(new Error("Invitation is invalid or expired"), { status: 410 });
-      if (invitation.invitedEmail !== actor.email.toLowerCase()) throw Object.assign(new Error("This invitation belongs to a different email"), { status: 403 });
+      if (invitation.invitedPhone !== actor.phone) throw Object.assign(new Error("This invitation belongs to a different verified phone number"), { status: 403 });
       return lockRoster(tx, invitation.teamId, async () => {
         const [updated] = await tx.update(playerInvitations).set({ status: "ACCEPTED", acceptedAt: new Date() }).where(and(eq(playerInvitations.id, invitation.id), eq(playerInvitations.status, "PENDING"))).returning();
         if (!updated) throw Object.assign(new Error("Invitation was already accepted"), { status: 409 });

@@ -57,12 +57,15 @@ export const GetDashboardResponse = zod.object({
 })
 
 
+export const getCurrentUserResponsePhoneRegExp = new RegExp('^\\+[1-9]\\d{1,14}$');
+
+
 export const GetCurrentUserResponse = zod.object({
   "id": zod.int(),
-  "email": zod.email(),
+  "email": zod.email().optional(),
   "firstName": zod.string(),
   "lastName": zod.string(),
-  "phone": zod.string().nullish(),
+  "phone": zod.string().regex(getCurrentUserResponsePhoneRegExp),
   "role": zod.enum(['COMMISSIONER', 'CAPTAIN', 'PLAYER'])
 })
 
@@ -73,16 +76,18 @@ export const GetCurrentUserResponse = zod.object({
 
 export const UpdateCurrentUserBody = zod.object({
   "firstName": zod.string().min(1),
-  "lastName": zod.string().min(1),
-  "phone": zod.string().nullish()
+  "lastName": zod.string().min(1)
 })
+
+export const updateCurrentUserResponsePhoneRegExp = new RegExp('^\\+[1-9]\\d{1,14}$');
+
 
 export const UpdateCurrentUserResponse = zod.object({
   "id": zod.int(),
-  "email": zod.email(),
+  "email": zod.email().optional(),
   "firstName": zod.string(),
   "lastName": zod.string(),
-  "phone": zod.string().nullish(),
+  "phone": zod.string().regex(updateCurrentUserResponsePhoneRegExp),
   "role": zod.enum(['COMMISSIONER', 'CAPTAIN', 'PLAYER'])
 })
 
@@ -159,12 +164,14 @@ export const GetTeamRosterParams = zod.object({
   "teamId": zod.coerce.number().int()
 })
 
+export const getTeamRosterResponsePhoneRegExp = new RegExp('^\\+[1-9]\\d{1,14}$');
+
+
 export const GetTeamRosterResponseItem = zod.object({
   "id": zod.int(),
   "firstName": zod.string(),
   "lastName": zod.string(),
-  "email": zod.email(),
-  "phone": zod.string(),
+  "phone": zod.string().regex(getTeamRosterResponsePhoneRegExp).optional(),
   "status": zod.enum(['ACTIVE', 'PENDING'])
 })
 export const GetTeamRosterResponse = zod.array(GetTeamRosterResponseItem)
@@ -202,8 +209,11 @@ export const CreateInvitationParams = zod.object({
   "teamId": zod.coerce.number().int()
 })
 
+export const createInvitationBodyPhoneRegExp = new RegExp('^\\+[1-9]\\d{1,14}$');
+
+
 export const CreateInvitationBody = zod.object({
-  "email": zod.email()
+  "phone": zod.string().regex(createInvitationBodyPhoneRegExp)
 })
 
 export const CreateInvitationResponse = zod.object({

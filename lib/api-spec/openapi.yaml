@@ -479,13 +479,13 @@ components:
             $ref: "#/components/schemas/Game"
     UserProfile:
       type: object
-      required: [id, email, firstName, lastName, role]
+      required: [id, firstName, lastName, phone, role]
       properties:
         id: { type: integer }
         email: { type: string, format: email }
         firstName: { type: string }
         lastName: { type: string }
-        phone: { type: ["string", "null"] }
+        phone: { type: string, pattern: '^\+[1-9]\d{1,14}$' }
         role: { type: string, enum: [COMMISSIONER, CAPTAIN, PLAYER] }
     ProfileInput:
       type: object
@@ -493,7 +493,6 @@ components:
       properties:
         firstName: { type: string, minLength: 1 }
         lastName: { type: string, minLength: 1 }
-        phone: { type: ["string", "null"] }
     CaptainInput:
       type: object
       required: [userId]
@@ -504,8 +503,8 @@ components:
       properties: { active: { type: boolean } }
     InvitationInput:
       type: object
-      required: [email]
-      properties: { email: { type: string, format: email } }
+      required: [phone]
+      properties: { phone: { type: string, pattern: '^\+[1-9]\d{1,14}$' } }
     InvitationResult:
       type: object
       required: [id, expiresAt, token]
@@ -583,13 +582,12 @@ components:
         scheduledAt: { type: string, format: date-time }
     Player:
       type: object
-      required: [id, firstName, lastName, email, phone, status]
+      required: [id, firstName, lastName, status]
       properties:
         id: { type: integer }
         firstName: { type: string }
         lastName: { type: string }
-        email: { type: string, format: email }
-        phone: { type: string }
+        phone: { type: string, pattern: '^\+[1-9]\d{1,14}$' }
         status: { type: string, enum: [ACTIVE, PENDING] }
     Game:
       type: object

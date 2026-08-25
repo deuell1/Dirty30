@@ -9,10 +9,10 @@ import type { UserProfileRole } from './userProfileRole';
 
 export interface UserProfile {
   id: number;
-  email: string;
+  email?: string;
   firstName: string;
   lastName: string;
-  /** @nullable */
-  phone?: string | null;
+  /** @pattern ^\+[1-9]\d{1,14}$ */
+  phone: string;
   role: UserProfileRole;
 }

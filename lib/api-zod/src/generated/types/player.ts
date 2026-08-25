@@ -11,7 +11,7 @@ export interface Player {
   id: number;
   firstName: string;
   lastName: string;
-  email: string;
-  phone: string;
+  /** @pattern ^\+[1-9]\d{1,14}$ */
+  phone?: string;
   status: PlayerStatus;
 }

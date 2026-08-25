@@ -1,7 +1,8 @@
 import type { NextFunction, Request, Response } from "express";
 import { clerkClient, getAuth } from "@clerk/express";
-import { eq, or } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db, users, type User } from "@workspace/db";
+import { normalizeUsPhone } from "../lib/phone";
 
 declare global {
   namespace Express {
@@ -22,30 +23,48 @@ export async function resolveCurrentUser(req: Request, res: Response, next: Next
     if (!userId) return res.status(401).json({ error: "Authentication required" });
 
     const clerkUser = await clerkClient.users.getUser(userId);
-    const primaryEmail = clerkUser.emailAddresses.find((email) => email.id === clerkUser.primaryEmailAddressId)?.emailAddress;
-    if (!primaryEmail) return res.status(400).json({ error: "A primary email address is required" });
+    const primaryPhone = clerkUser.phoneNumbers.find((phone) => phone.id === clerkUser.primaryPhoneNumberId);
+    if (!primaryPhone || primaryPhone.verification?.status !== "verified") {
+      return res.status(400).json({ error: "A verified primary phone number is required" });
+    }
+    const normalizedPhone = normalizeUsPhone(primaryPhone.phoneNumber);
+    const primaryEmail = clerkUser.emailAddresses.find((email) => email.id === clerkUser.primaryEmailAddressId);
+    const verifiedEmail = primaryEmail?.verification?.status === "verified" ? primaryEmail.emailAddress.toLowerCase() : undefined;
 
     const [firstName, lastName] = splitName([clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" "));
-    const normalizedEmail = primaryEmail.toLowerCase();
-    const existing = await db.query.users.findFirst({ where: or(eq(users.externalAuthId, userId), eq(users.email, normalizedEmail)) });
+    const [byExternalAuthId, byPhone] = await Promise.all([
+      db.query.users.findFirst({ where: eq(users.externalAuthId, userId) }),
+      db.query.users.findFirst({ where: eq(users.phone, normalizedPhone) }),
+    ]);
+    if (byExternalAuthId && byPhone && byExternalAuthId.id !== byPhone.id) {
+      return res.status(409).json({ error: "This verified phone number is already linked to a different league account" });
+    }
+    const existing = byExternalAuthId ?? byPhone;
     if (existing) {
-      const [updated] = await db.update(users).set({ externalAuthId: userId, email: normalizedEmail }).where(eq(users.id, existing.id)).returning();
+      if (existing.phone !== normalizedPhone) {
+        return res.status(403).json({ error: "Your verified Clerk phone does not match this league account. Contact a commissioner before changing it." });
+      }
+      const [updated] = await db.update(users).set({
+        externalAuthId: userId,
+        email: verifiedEmail ?? null,
+        firstName: existing.firstName || firstName,
+        lastName: existing.lastName || lastName,
+      }).where(eq(users.id, existing.id)).returning();
       if (!updated?.active) return res.status(403).json({ error: "This league account is inactive" });
       res.locals.currentUser = updated;
       return next();
     }
 
-    const bootstrapEmail = process.env.BOOTSTRAP_COMMISSIONER_EMAIL?.trim().toLowerCase();
-    const role = bootstrapEmail && bootstrapEmail === normalizedEmail ? "COMMISSIONER" : "PLAYER";
+    const bootstrapPhoneRaw = process.env.BOOTSTRAP_COMMISSIONER_PHONE?.trim();
+    const bootstrapPhone = bootstrapPhoneRaw ? normalizeUsPhone(bootstrapPhoneRaw) : undefined;
+    const role = bootstrapPhone && bootstrapPhone === normalizedPhone ? "COMMISSIONER" : "PLAYER";
     const [created] = await db.insert(users).values({
       externalAuthId: userId,
-      email: normalizedEmail,
+      phone: normalizedPhone,
+      email: verifiedEmail,
       firstName,
       lastName,
       role,
-    }).onConflictDoUpdate({
-      target: users.email,
-      set: { externalAuthId: userId, firstName, lastName },
     }).returning();
     if (!created?.active) return res.status(403).json({ error: "This league account is inactive" });
     res.locals.currentUser = created;

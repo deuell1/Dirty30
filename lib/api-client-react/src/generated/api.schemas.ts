@@ -67,11 +67,11 @@ export const UserProfileRole = {
 
 export interface UserProfile {
   id: number;
-  email: string;
+  email?: string;
   firstName: string;
   lastName: string;
-  /** @nullable */
-  phone?: string | null;
+  /** @pattern ^\+[1-9]\d{1,14}$ */
+  phone: string;
   role: UserProfileRole;
 }
 
@@ -80,8 +80,6 @@ export interface ProfileInput {
   firstName: string;
   /** @minLength 1 */
   lastName: string;
-  /** @nullable */
-  phone?: string | null;
 }
 
 export interface CaptainInput {
@@ -93,7 +91,8 @@ export interface ActiveInput {
 }
 
 export interface InvitationInput {
-  email: string;
+  /** @pattern ^\+[1-9]\d{1,14}$ */
+  phone: string;
 }
 
 export interface InvitationResult {
@@ -184,8 +183,8 @@ export interface Player {
   id: number;
   firstName: string;
   lastName: string;
-  email: string;
-  phone: string;
+  /** @pattern ^\+[1-9]\d{1,14}$ */
+  phone?: string;
   status: PlayerStatus;
 }
 

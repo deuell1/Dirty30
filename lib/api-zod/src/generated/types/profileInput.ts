@@ -11,6 +11,4 @@ export interface ProfileInput {
   firstName: string;
   /** @minLength 1 */
   lastName: string;
-  /** @nullable */
-  phone?: string | null;
 }

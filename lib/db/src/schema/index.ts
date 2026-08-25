@@ -30,10 +30,10 @@ const timestamps = {
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   externalAuthId: varchar("external_auth_id", { length: 255 }).notNull().unique(),
-  email: varchar("email", { length: 320 }).notNull().unique(),
+  email: varchar("email", { length: 320 }).unique(),
   firstName: varchar("first_name", { length: 100 }).notNull().default(""),
   lastName: varchar("last_name", { length: 100 }).notNull().default(""),
-  phone: varchar("phone", { length: 40 }),
+  phone: varchar("phone", { length: 40 }).notNull().unique(),
   role: userRoleEnum("role").notNull().default("PLAYER"),
   active: boolean("active").notNull().default(true),
   ...timestamps,
@@ -84,7 +84,7 @@ export const teamMemberships = pgTable("team_memberships", {
 export const playerInvitations = pgTable("player_invitations", {
   id: serial("id").primaryKey(),
   teamId: integer("team_id").notNull().references(() => teams.id, { onDelete: "restrict" }),
-  invitedEmail: varchar("invited_email", { length: 320 }).notNull(),
+  invitedPhone: varchar("invited_phone", { length: 40 }).notNull(),
   invitedByUserId: integer("invited_by_user_id").notNull().references(() => users.id, { onDelete: "restrict" }),
   tokenHash: varchar("token_hash", { length: 128 }).notNull().unique(),
   status: invitationStatusEnum("status").notNull().default("PENDING"),
@@ -93,7 +93,7 @@ export const playerInvitations = pgTable("player_invitations", {
   cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
   ...timestamps,
 }, (table) => [
-  uniqueIndex("invitations_pending_team_email").on(table.teamId, table.invitedEmail).where(sql`${table.status} = 'PENDING'`),
+  uniqueIndex("invitations_pending_team_phone").on(table.teamId, table.invitedPhone).where(sql`${table.status} = 'PENDING'`),
   index("invitations_token_idx").on(table.tokenHash),
 ]);
 

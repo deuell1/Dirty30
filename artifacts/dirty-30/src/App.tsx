@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { SignIn, useAuth } from '@clerk/react';
+import { useAuth, useClerk } from '@clerk/react';
+import { parsePhoneNumberFromString } from 'libphonenumber-js';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -42,6 +43,8 @@ import {
   getListGamesQueryKey,
   getListTeamsQueryKey,
   useCreateTeam,
+  useCreateInvitation,
+  useCancelInvitation,
   useConfirmScore,
   useDisputeScore,
   useGetDashboard,
@@ -58,6 +61,8 @@ import {
   useUpdateTeam,
   useUpdateCurrentUser,
   setAuthTokenGetter,
+  useRegenerateInvitation,
+  useAcceptInvitation,
   type Dashboard,
   type Game,
   type Player,
@@ -68,6 +73,7 @@ import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
+import { PhoneAuthScreen } from '@/components/phone-auth';
 import { Link, Route, Switch, useLocation, useParams, Router as WouterRouter } from 'wouter';
 
 const queryClient = new QueryClient();
@@ -103,6 +109,10 @@ function roleLabel(role?: string) {
 
 function initials(name: string) {
   return name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase();
+}
+function normalizeUsPhoneInput(value: string) {
+  const phone = parsePhoneNumberFromString(value.trim(), 'US');
+  return phone?.isValid() && phone.country === 'US' ? phone.number : null;
 }
 
 function Badge({ children, tone = 'neutral' }: { children: ReactNode; tone?: 'neutral' | 'gold' | 'teal' | 'coral' | 'dark' }) {
@@ -148,6 +158,7 @@ function Shell({ children }: { children: ReactNode }) {
   const currentUser = useGetCurrentUser().data;
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dark, setDark] = useState(false);
+  const { signOut } = useClerk();
   const displayName = currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : 'League member';
   const displayInitials = initials(displayName);
   const active = (href: string) => href === '/' ? location === '/' : location.startsWith(href);
@@ -162,7 +173,7 @@ function Shell({ children }: { children: ReactNode }) {
       <div className="flex items-center justify-between"><LeagueLogo /><button data-testid="button-close-menu" onClick={() => setMobileOpen(false)} className="rounded-lg p-2 text-[hsl(var(--sidebar-foreground)/.65)] hover:bg-[hsl(var(--sidebar-accent))] lg:hidden"><X className="h-5 w-5" /></button></div>
        <div className="mt-12"><p className="mb-3 px-3 font-mono-custom text-[9px] font-bold uppercase tracking-[.18em] text-[hsl(var(--sidebar-foreground)/.42)]">League room</p><nav className="space-y-1">{navItems.map(({ href, label, icon: Icon }) => <Link key={href} href={href} data-testid={`link-nav-${label.toLowerCase()}`} onClick={() => setMobileOpen(false)} className={cx('flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold transition', active(href) ? 'bg-[hsl(var(--sidebar-primary))] text-[hsl(var(--sidebar-primary-foreground))]' : 'text-[hsl(var(--sidebar-foreground)/.67)] hover:bg-[hsl(var(--sidebar-accent))] hover:text-[hsl(var(--sidebar-foreground))]')}><Icon className="h-[18px] w-[18px]" />{label}{href === '/schedule' && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[hsl(var(--destructive))]" />}</Link>)}</nav></div>
       <div className="mt-auto space-y-1"><Link href="/review" data-testid="link-nav-review" className={cx('flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold transition', active('/review') ? 'bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-foreground))]' : 'text-[hsl(var(--sidebar-foreground)/.67)] hover:bg-[hsl(var(--sidebar-accent))]')}><ClipboardCheck className="h-[18px] w-[18px]" />Review queue<Badge tone="gold">2</Badge></Link><Link href="/settings" data-testid="link-nav-settings" className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-[hsl(var(--sidebar-foreground)/.67)] transition hover:bg-[hsl(var(--sidebar-accent))] hover:text-[hsl(var(--sidebar-foreground))]"><Settings className="h-[18px] w-[18px]" />Settings</Link></div>
-      <div className="mt-5 border-t border-[hsl(var(--sidebar-border))] pt-5"><div className="flex items-center gap-3"><div className="grid h-9 w-9 place-items-center rounded-full bg-[hsl(var(--sidebar-primary))] font-display text-sm font-bold text-[hsl(var(--sidebar-primary-foreground))]">{displayInitials}</div><div className="min-w-0"><p className="truncate text-sm font-bold">{displayName}</p><p className="text-[10px] text-[hsl(var(--sidebar-foreground)/.48)]">{roleLabel(currentUser?.role)}</p></div><button data-testid="button-toggle-theme" onClick={toggleDark} className="ml-auto rounded-lg p-2 text-[hsl(var(--sidebar-foreground)/.52)] hover:bg-[hsl(var(--sidebar-accent))]">{dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}</button></div></div>
+      <div className="mt-5 border-t border-[hsl(var(--sidebar-border))] pt-5"><div className="flex items-center gap-3"><div className="grid h-9 w-9 place-items-center rounded-full bg-[hsl(var(--sidebar-primary))] font-display text-sm font-bold text-[hsl(var(--sidebar-primary-foreground))]">{displayInitials}</div><div className="min-w-0"><p className="truncate text-sm font-bold">{displayName}</p><p className="text-[10px] text-[hsl(var(--sidebar-foreground)/.48)]">{roleLabel(currentUser?.role)}</p></div><button data-testid="button-toggle-theme" onClick={toggleDark} className="ml-auto rounded-lg p-2 text-[hsl(var(--sidebar-foreground)/.52)] hover:bg-[hsl(var(--sidebar-accent))]">{dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}</button></div><button data-testid="button-sign-out" onClick={() => void signOut()} className="mt-4 text-xs font-bold text-[hsl(var(--sidebar-foreground)/.58)] hover:text-[hsl(var(--sidebar-foreground))]">Sign out</button></div>
     </aside>
     {mobileOpen && <button aria-label="Close navigation" data-testid="button-menu-overlay" onClick={() => setMobileOpen(false)} className="fixed inset-0 z-20 bg-[hsl(var(--sidebar)/.45)] lg:hidden" />}
     <div className="lg:pl-[252px]"><header className="sticky top-0 z-10 flex h-[72px] items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--background)/.91)] px-5 backdrop-blur-md sm:px-8"><button data-testid="button-open-menu" onClick={() => setMobileOpen(true)} className="rounded-xl p-2 text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))] lg:hidden"><Menu className="h-5 w-5" /></button><div className="hidden items-center gap-2 text-xs text-[hsl(var(--muted-foreground))] lg:flex"><span className={cx('h-2 w-2 rounded-full', health.data ? 'bg-[hsl(var(--primary))]' : 'bg-[hsl(var(--accent))]')} />{health.data ? 'League systems online' : 'League room'}</div><div className="ml-auto flex items-center gap-2 sm:gap-4"><Link href="/settings" data-testid="link-header-settings" className="rounded-xl p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]"><Settings className="h-5 w-5" /></Link><div className="hidden h-5 w-px bg-[hsl(var(--border))] sm:block" /><span className="grid h-9 w-9 place-items-center rounded-full bg-[hsl(var(--primary))] font-display text-xs font-bold text-[hsl(var(--primary-foreground))]">JM</span></div></header><main className="mx-auto max-w-[1360px] px-5 py-7 pb-24 sm:px-8 sm:py-10 lg:px-12 lg:pb-12">{children}</main></div>
@@ -210,9 +221,15 @@ function TeamDetail() {
   const team = useGetTeam(teamId, { query: { enabled: Number.isFinite(teamId), queryKey: getGetTeamQueryKey(teamId) } });
   const roster = useGetTeamRoster(teamId, { query: { enabled: Number.isFinite(teamId), queryKey: getGetTeamRosterQueryKey(teamId) } });
   const update = useUpdateTeam();
+  const createInvitation = useCreateInvitation();
+  const cancelInvitation = useCancelInvitation();
+  const regenerateInvitation = useRegenerateInvitation();
+  const currentUser = useGetCurrentUser();
   const client = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState('');
+  const [invitePhone, setInvitePhone] = useState('');
+  const [inviteLink, setInviteLink] = useState('');
   const teamData = team.data as Team | undefined;
   const players = roster.data as Player[] | undefined;
   const save = (event: FormEvent<HTMLFormElement>) => {
@@ -220,7 +237,23 @@ function TeamDetail() {
     if (!name.trim()) return;
     update.mutate({ teamId, data: { name: name.trim() } }, { onSuccess: (updated) => { client.setQueryData(getGetTeamQueryKey(teamId), updated); void client.invalidateQueries({ queryKey: getListTeamsQueryKey() }); setEditing(false); } });
   };
-  return <div className="animate-rise"><Link href="/teams" data-testid="link-back-teams" className="mb-7 inline-flex items-center gap-2 text-sm font-bold text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))]"><ArrowLeft className="h-4 w-4" /> All teams</Link><QueryState loading={team.isLoading} error={team.error} onRetry={() => void team.refetch()}><div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><p className="mb-3 font-mono-custom text-[10px] font-bold uppercase tracking-[.2em] text-[hsl(var(--primary))]">Team profile</p><div className="flex items-center gap-4"><div className="grid h-16 w-16 place-items-center rounded-2xl bg-[hsl(var(--accent))] font-display text-2xl font-extrabold shadow-[4px_4px_0_hsl(var(--primary))]">{initials(teamData?.name ?? 'Team')}</div><div><h1 className="font-display text-4xl font-extrabold tracking-[-.055em]" data-testid="text-team-name">{teamData?.name ?? 'Team'}</h1><p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">{teamData?.captainName || 'Captain TBA'} · {teamData?.playerCount ?? players?.length ?? 0} on roster</p></div></div></div><Button variant="outline" onClick={() => { setName(teamData?.name ?? ''); setEditing((value) => !value); }} testId="button-edit-team"><Pencil className="h-4 w-4" /> Edit team</Button></div>{editing && <form onSubmit={save} className="mb-6 flex flex-col gap-3 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 sm:flex-row"><input data-testid="input-edit-team-name" value={name} onChange={(event) => setName(event.target.value)} className="min-h-11 flex-1 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 text-sm outline-none focus:border-[hsl(var(--primary))]" /><Button type="submit" disabled={update.isPending} testId="button-update-team">{update.isPending ? 'Updating…' : 'Update name'}</Button></form>}<div className="mb-5 flex items-end justify-between"><div><p className="font-mono-custom text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--muted-foreground))]">The bench</p><h2 className="mt-1 font-display text-2xl font-bold tracking-[-.04em]">Roster</h2></div><Badge tone="teal">{players?.filter((player) => player.status === PlayerStatus.ACTIVE).length ?? 0} active</Badge></div><QueryState loading={roster.isLoading} error={roster.error} onRetry={() => void roster.refetch()} empty={!players?.length} emptyLabel="This roster is waiting for players."><div className="overflow-hidden rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))]">{players?.map((player, index) => <div key={player.id} data-testid={`row-player-${player.id}`} className={cx('flex items-center gap-3 p-4 sm:gap-4', index !== players.length - 1 && 'border-b border-[hsl(var(--border))]')}><div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[hsl(var(--primary)/.1)] font-display text-sm font-bold text-[hsl(var(--primary))]">{initials(`${player.firstName} ${player.lastName}`)}</div><div className="min-w-0 flex-1"><p className="truncate text-sm font-bold">{player.firstName} {player.lastName}</p><p className="truncate text-xs text-[hsl(var(--muted-foreground))]">{player.email}</p></div><Badge tone={player.status === PlayerStatus.ACTIVE ? 'teal' : 'gold'}>{player.status === PlayerStatus.ACTIVE ? 'Active' : 'Pending'}</Badge><span className="hidden text-xs text-[hsl(var(--muted-foreground))] sm:block">{player.phone}</span></div>)}</div></QueryState></QueryState></div>;
+  const canManageRoster = currentUser.data?.role === DashboardRole.COMMISSIONER || currentUser.data?.role === DashboardRole.CAPTAIN;
+  const createInvite = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!invitePhone.trim()) return;
+    const normalizedPhone = normalizeUsPhoneInput(invitePhone);
+    if (!normalizedPhone) return;
+    createInvitation.mutate({ teamId, data: { phone: normalizedPhone } }, {
+      onSuccess: (invite) => {
+        const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+        setInviteLink(`${window.location.origin}${base}/invite/${invite.token}`);
+        setInvitePhone('');
+        void client.invalidateQueries({ queryKey: getGetTeamRosterQueryKey(teamId) });
+      },
+    });
+  };
+  const copyInvite = async () => { if (inviteLink) await navigator.clipboard.writeText(inviteLink); };
+  return <div className="animate-rise"><Link href="/teams" data-testid="link-back-teams" className="mb-7 inline-flex items-center gap-2 text-sm font-bold text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))]"><ArrowLeft className="h-4 w-4" /> All teams</Link><QueryState loading={team.isLoading} error={team.error} onRetry={() => void team.refetch()}><div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><p className="mb-3 font-mono-custom text-[10px] font-bold uppercase tracking-[.2em] text-[hsl(var(--primary))]">Team profile</p><div className="flex items-center gap-4"><div className="grid h-16 w-16 place-items-center rounded-2xl bg-[hsl(var(--accent))] font-display text-2xl font-extrabold shadow-[4px_4px_0_hsl(var(--primary))]">{initials(teamData?.name ?? 'Team')}</div><div><h1 className="font-display text-4xl font-extrabold tracking-[-.055em]" data-testid="text-team-name">{teamData?.name ?? 'Team'}</h1><p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">{teamData?.captainName || 'Captain TBA'} · {teamData?.playerCount ?? players?.length ?? 0} on roster</p></div></div></div><Button variant="outline" onClick={() => { setName(teamData?.name ?? ''); setEditing((value) => !value); }} testId="button-edit-team"><Pencil className="h-4 w-4" /> Edit team</Button></div>{editing && <form onSubmit={save} className="mb-6 flex flex-col gap-3 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 sm:flex-row"><input data-testid="input-edit-team-name" value={name} onChange={(event) => setName(event.target.value)} className="min-h-11 flex-1 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 text-sm outline-none focus:border-[hsl(var(--primary))]" /><Button type="submit" disabled={update.isPending} testId="button-update-team">{update.isPending ? 'Updating…' : 'Update name'}</Button></form>}{canManageRoster && <section className="mb-6 rounded-2xl border border-[hsl(var(--primary)/.25)] bg-[hsl(var(--primary)/.06)] p-4"><p className="font-mono-custom text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--primary))]">Roster management</p><h2 className="mt-1 font-display text-xl font-bold">Invite by verified phone</h2><form onSubmit={createInvite} className="mt-4 flex flex-col gap-3 sm:flex-row"><input data-testid="input-invite-phone" inputMode="tel" autoComplete="tel" value={invitePhone} onChange={(event) => setInvitePhone(event.target.value)} placeholder="(312) 555-0123" className="min-h-11 flex-1 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 text-sm outline-none focus:border-[hsl(var(--primary))]" /><Button type="submit" disabled={createInvitation.isPending} testId="button-create-invitation">{createInvitation.isPending ? 'Creating…' : 'Create invite'}</Button></form>{createInvitation.error && <p className="mt-3 text-xs font-semibold text-[hsl(var(--destructive))]">Unable to create this invitation. Check the number and roster capacity.</p>}{inviteLink && <div className="mt-4 flex flex-col gap-2 rounded-xl bg-[hsl(var(--card))] p-3 sm:flex-row sm:items-center"><code data-testid="text-invitation-link" className="min-w-0 flex-1 break-all text-xs">{inviteLink}</code><Button variant="outline" onClick={() => void copyInvite()} testId="button-copy-invitation">Copy link</Button></div>}</section>}<div className="mb-5 flex items-end justify-between"><div><p className="font-mono-custom text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--muted-foreground))]">The bench</p><h2 className="mt-1 font-display text-2xl font-bold tracking-[-.04em]">Roster</h2></div><Badge tone="teal">{players?.filter((player) => player.status === PlayerStatus.ACTIVE).length ?? 0} active</Badge></div><QueryState loading={roster.isLoading} error={roster.error} onRetry={() => void roster.refetch()} empty={!players?.length} emptyLabel="This roster is waiting for players."><div className="overflow-hidden rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))]">{players?.map((player, index) => <div key={player.id} data-testid={`row-player-${player.id}`} className={cx('flex items-center gap-3 p-4 sm:gap-4', index !== players.length - 1 && 'border-b border-[hsl(var(--border))]')}><div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[hsl(var(--primary)/.1)] font-display text-sm font-bold text-[hsl(var(--primary))]">{initials(`${player.firstName} ${player.lastName}`)}</div><div className="min-w-0 flex-1"><p className="truncate text-sm font-bold">{player.firstName} {player.lastName}</p>{player.phone && <p className="truncate text-xs text-[hsl(var(--muted-foreground))]">{player.phone}</p>}</div><Badge tone={player.status === PlayerStatus.ACTIVE ? 'teal' : 'gold'}>{player.status === PlayerStatus.ACTIVE ? 'Active' : 'Pending'}</Badge>{canManageRoster && player.status === PlayerStatus.PENDING && <div className="flex gap-1"><button data-testid={`button-regenerate-invitation-${-player.id}`} onClick={() => regenerateInvitation.mutate({ teamId, invitationId: -player.id }, { onSuccess: (invite) => { const base = import.meta.env.BASE_URL.replace(/\/$/, ''); setInviteLink(`${window.location.origin}${base}/invite/${invite.token}`); } })} className="rounded-lg px-2 py-1 text-[10px] font-bold text-[hsl(var(--primary))]">Regenerate</button><button data-testid={`button-cancel-invitation-${-player.id}`} onClick={() => cancelInvitation.mutate({ teamId, invitationId: -player.id }, { onSuccess: () => void client.invalidateQueries({ queryKey: getGetTeamRosterQueryKey(teamId) }) })} className="rounded-lg px-2 py-1 text-[10px] font-bold text-[hsl(var(--destructive))]">Cancel</button></div>}</div>)}</div></QueryState></QueryState></div>;
 }
 
 function Schedule() {
@@ -288,20 +321,18 @@ function SettingsPage() {
   const client = useQueryClient();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [phone, setPhone] = useState('');
   useEffect(() => {
     if (!profile.data) return;
     setFirstName(profile.data.firstName);
     setLastName(profile.data.lastName);
-    setPhone(profile.data.phone ?? '');
   }, [profile.data]);
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    update.mutate({ data: { firstName: firstName.trim(), lastName: lastName.trim(), phone: phone.trim() || null } }, {
+    update.mutate({ data: { firstName: firstName.trim(), lastName: lastName.trim() } }, {
       onSuccess: (updated) => client.setQueryData(getGetCurrentUserQueryKey(), updated),
     });
   };
-  return <div className="animate-rise"><PageHeading eyebrow="Your league account" title="Settings" detail="Keep your league contact details current." /><QueryState loading={profile.isLoading} error={profile.error || update.error} onRetry={() => void profile.refetch()}><form onSubmit={submit} className="max-w-2xl space-y-5"><section className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 sm:p-7"><div className="mb-6 flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-[hsl(var(--primary)/.1)] text-[hsl(var(--primary))]"><SlidersHorizontal className="h-5 w-5" /></div><div><h2 className="font-display text-xl font-bold">Profile details</h2><p className="text-xs text-[hsl(var(--muted-foreground))]">Used for rosters and league communication.</p></div></div><div className="grid gap-4 sm:grid-cols-2"><label className="block text-sm font-bold">First name<input required data-testid="input-profile-first-name" value={firstName} onChange={(event) => setFirstName(event.target.value)} className="mt-2 min-h-12 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 font-medium outline-none focus:border-[hsl(var(--primary))]" /></label><label className="block text-sm font-bold">Last name<input required data-testid="input-profile-last-name" value={lastName} onChange={(event) => setLastName(event.target.value)} className="mt-2 min-h-12 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 font-medium outline-none focus:border-[hsl(var(--primary))]" /></label><label className="block text-sm font-bold sm:col-span-2">Phone <span className="font-normal text-[hsl(var(--muted-foreground))]">(optional)</span><input data-testid="input-profile-phone" value={phone} onChange={(event) => setPhone(event.target.value)} className="mt-2 min-h-12 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 font-medium outline-none focus:border-[hsl(var(--primary))]" /></label></div></section><section className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 sm:p-7"><div className="flex items-center justify-between rounded-xl bg-[hsl(var(--muted)/.65)] p-4"><div><p className="text-sm font-bold">{profile.data ? `${profile.data.firstName} ${profile.data.lastName}` : 'League member'}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{profile.data?.email}</p></div><Badge tone="teal">{roleLabel(profile.data?.role)}</Badge></div></section><div className="flex items-center gap-3"><Button type="submit" disabled={update.isPending || !firstName.trim() || !lastName.trim()} testId="button-save-profile">{update.isPending ? 'Saving…' : <><Check className="h-4 w-4" /> Save profile</>}</Button>{update.isSuccess && <span className="text-xs font-semibold text-[hsl(var(--primary))]" data-testid="status-profile-saved">Profile saved</span>}</div></form></QueryState></div>;
+  return <div className="animate-rise"><PageHeading eyebrow="Your league account" title="Settings" detail="Keep your league profile current." /><QueryState loading={profile.isLoading} error={profile.error || update.error} onRetry={() => void profile.refetch()}><form onSubmit={submit} className="max-w-2xl space-y-5"><section className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 sm:p-7"><div className="mb-6 flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-[hsl(var(--primary)/.1)] text-[hsl(var(--primary))]"><SlidersHorizontal className="h-5 w-5" /></div><div><h2 className="font-display text-xl font-bold">Profile details</h2><p className="text-xs text-[hsl(var(--muted-foreground))]">Used for rosters and game-day communication.</p></div></div><div className="grid gap-4 sm:grid-cols-2"><label className="block text-sm font-bold">First name<input required data-testid="input-profile-first-name" value={firstName} onChange={(event) => setFirstName(event.target.value)} className="mt-2 min-h-12 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 font-medium outline-none focus:border-[hsl(var(--primary))]" /></label><label className="block text-sm font-bold">Last name<input required data-testid="input-profile-last-name" value={lastName} onChange={(event) => setLastName(event.target.value)} className="mt-2 min-h-12 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 font-medium outline-none focus:border-[hsl(var(--primary))]" /></label></div></section><section className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 sm:p-7"><p className="font-mono-custom text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--primary))]">Verified phone</p><div className="mt-3 flex items-center justify-between rounded-xl bg-[hsl(var(--muted)/.65)] p-4"><div><p data-testid="text-verified-phone" className="text-sm font-bold">{profile.data?.phone ?? 'Loading…'}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Your phone is verified by Clerk and cannot be changed here.</p></div><Badge tone="teal">{roleLabel(profile.data?.role)}</Badge></div></section><div className="flex items-center gap-3"><Button type="submit" disabled={update.isPending || !firstName.trim() || !lastName.trim()} testId="button-save-profile">{update.isPending ? 'Saving…' : <><Check className="h-4 w-4" /> Save profile</>}</Button>{update.isSuccess && <span className="text-xs font-semibold text-[hsl(var(--primary))]" data-testid="status-profile-saved">Profile saved</span>}</div></form></QueryState></div>;
 }
 
 function Login() {
@@ -313,9 +344,18 @@ function Login() {
 }
 
 function ClerkLogin() {
-  return <div className="noise flex min-h-[100dvh] items-center justify-center bg-[hsl(var(--sidebar))] p-5">
-    <SignIn routing="hash" />
-  </div>;
+  return <PhoneAuthScreen />;
+}
+
+function InviteAcceptance() {
+  const params = useParams<{ token: string }>();
+  const accept = useAcceptInvitation();
+  const [, setLocation] = useLocation();
+  const acceptInvite = () => {
+    if (!params.token) return;
+    accept.mutate({ token: params.token }, { onSuccess: () => setLocation('/teams') });
+  };
+  return <div className="mx-auto max-w-xl py-12"><section className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6 text-center"><Badge tone="gold">Team invitation</Badge><h1 className="mt-4 font-display text-3xl font-extrabold">Ready to take a roster spot?</h1><p className="mx-auto mt-3 max-w-md text-sm leading-6 text-[hsl(var(--muted-foreground))]">Accepting this invitation confirms that your signed-in, verified phone number matches the one the captain invited.</p>{accept.error && <p data-testid="text-invite-error" className="mt-4 rounded-xl bg-[hsl(var(--destructive)/.08)] p-3 text-sm font-semibold text-[hsl(var(--destructive))]">This invitation can’t be accepted. It may be expired, cancelled, or tied to a different phone number.</p>}<Button className="mt-6" onClick={acceptInvite} disabled={accept.isPending} testId="button-accept-invitation">{accept.isPending ? 'Claiming your spot…' : 'Accept invitation'}</Button></section></div>;
 }
 
 function AuthBoundary() {
@@ -328,10 +368,9 @@ function AuthBoundary() {
   return isSignedIn ? <Router /> : <ClerkLogin />;
 }
 
- function Router() {
+function Router() {
   const [location] = useLocation();
-  if (location === '/login') return <Switch><Route path="/login" component={Login} /><Route component={NotFound} /></Switch>;
-  return <Shell><ErrorBoundary resetKey={location}><Switch><Route path="/" component={Home} /><Route path="/teams/:teamId" component={TeamDetail} /><Route path="/teams" component={Teams} /><Route path="/schedule/:gameId" component={GameDetail} /><Route path="/schedule" component={Schedule} /><Route path="/standings" component={Standings} /><Route path="/review" component={ReviewPersisted} /><Route path="/settings" component={SettingsPage} /><Route component={NotFound} /></Switch></ErrorBoundary></Shell>;
+  return <Shell><ErrorBoundary resetKey={location}><Switch><Route path="/invite/:token" component={InviteAcceptance} /><Route path="/" component={Home} /><Route path="/teams/:teamId" component={TeamDetail} /><Route path="/teams" component={Teams} /><Route path="/schedule/:gameId" component={GameDetail} /><Route path="/schedule" component={Schedule} /><Route path="/standings" component={Standings} /><Route path="/review" component={ReviewPersisted} /><Route path="/settings" component={SettingsPage} /><Route component={NotFound} /></Switch></ErrorBoundary></Shell>;
 }
 
 function App() {
