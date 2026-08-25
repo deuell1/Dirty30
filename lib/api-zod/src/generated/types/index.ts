@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './acceptInvitation200';
 export * from './activeInput';
 export * from './captainInput';
 export * from './court';

@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AcceptInvitation200,
   ActiveInput,
   CaptainInput,
   Court,
@@ -1127,9 +1128,9 @@ export const getAcceptInvitationUrl = (token: string,) => {
   return `/api/invitations/${token}/accept`
 }
 
-export const acceptInvitation = async (token: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+export const acceptInvitation = async (token: string, options?: Parameters<typeof customFetch>[1]): Promise<AcceptInvitation200> => {
 
-  return customFetch<void>(getAcceptInvitationUrl(token),
+  return customFetch<AcceptInvitation200>(getAcceptInvitationUrl(token),
   {
     ...options,
     method: 'POST'
