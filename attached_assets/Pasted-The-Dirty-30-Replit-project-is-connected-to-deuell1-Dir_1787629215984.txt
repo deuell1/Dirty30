@@ -1,0 +1,35 @@
+The Dirty 30 Replit project is connected to deuell1/Dirty30, but GitHub still shows only the original README commit from August 9, 2026. Diagnose and complete the Git synchronization.
+
+Do not rebuild the application, delete files, reset the repository, overwrite existing work, or begin schedule and score functionality.
+
+Complete these steps:
+
+1. Inspect the current working directory and confirm it contains the Dirty 30 Phase 1 application.
+2. Report the current Git branch.
+3. Run git status and identify all tracked, modified, staged, untracked, and ignored application files.
+4. Confirm the configured Git remote points to:
+    https://github.com/deuell1/Dirty30
+5. Check whether application work exists on another local branch.
+6. Verify that .gitignore does not accidentally exclude source files, migrations, tests, configuration templates, or the lockfile.
+7. Ensure secrets, .env values, credentials, database contents, build output, and dependency folders will not be committed.
+8. Create or update .env.example using safe placeholder values only.
+9. Run type checking, linting, tests, and the production build. Correct failures caused by the Phase 1 implementation.
+10. Stage all appropriate Phase 1 source files, database schema and migrations, tests, package files, lockfile, .gitignore, .env.example, and README.
+11. Commit the completed work with:
+    Build authentication, teams, and roster management
+12. Push the commit to the GitHub main branch.
+13. Verify the remote main branch contains the new commit and application files.
+
+If the push is blocked by authentication, branch protection, merge conflicts, or Replit permission settings, stop and report the exact error. Do not force-push, delete branches, discard changes, or replace remote history.
+
+At completion, report:
+
+* Current branch
+* Files committed
+* Test, lint, type-check, and build results
+* Commit SHA
+* Push result
+* GitHub repository and branch updated
+* Any files intentionally excluded and why
+
+Do not claim completion unless the commit is visible on the remote main branch.
