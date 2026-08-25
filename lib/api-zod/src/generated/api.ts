@@ -274,7 +274,9 @@ export const AcceptInvitationParams = zod.object({
   "token": zod.coerce.string()
 })
 
-export const AcceptInvitationResponse = zod.void()
+export const AcceptInvitationResponse = zod.object({
+  "teamId": zod.int()
+})
 
 
 export const ListGamesQueryParams = zod.object({

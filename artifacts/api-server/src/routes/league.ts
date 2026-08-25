@@ -268,7 +268,7 @@ router.post("/invitations/:token/accept", async (req, res, next) => {
       });
     });
     await audit(actor.id, "invitation", accepted.id, "ACCEPTED", undefined, { userId: actor.id });
-    return res.status(204).end();
+    return res.json({ teamId: accepted.teamId });
   } catch (error) { return next(error); }
 });
 router.post("/teams/:teamId/invitations/:invitationId/regenerate", async (req, res, next) => {

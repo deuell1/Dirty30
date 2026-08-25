@@ -197,7 +197,15 @@ paths:
       operationId: acceptInvitation
       tags: [teams]
       parameters: [ { $ref: "#/components/parameters/InvitationToken" } ]
-      responses: { "204": { description: Invitation accepted } }
+      responses:
+        "200":
+          description: Invitation accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [teamId]
+                properties: { teamId: { type: integer } }
   /schedule:
     get:
       operationId: listGames

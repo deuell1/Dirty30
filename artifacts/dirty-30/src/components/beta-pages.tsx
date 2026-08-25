@@ -140,8 +140,9 @@ export function ProfilePage() {
 export function InvitationPage() {
   const { token } = useParams<{ token: string }>();
   const accept = useAcceptInvitation();
+  const client = useQueryClient();
   const [, navigate] = useLocation();
-  return <div className="mx-auto max-w-xl py-12"><section className={`${card} text-center`}><p className="text-xs font-bold uppercase tracking-[.16em] text-[hsl(var(--primary))]">Team invitation</p><h1 className="mt-3 font-display text-3xl font-extrabold">Ready to take a roster spot?</h1><p className="mt-3 text-sm text-[hsl(var(--muted-foreground))]">Your signed-in verified phone must match the captain’s invitation.</p>{accept.error && <p className="mt-4 rounded-xl bg-[hsl(var(--destructive)/.1)] p-3 text-sm font-semibold text-[hsl(var(--destructive))]">{errorText(accept.error)}</p>}<button className={`${action} mt-5`} onClick={() => token && accept.mutate({ token }, { onSuccess: () => navigate("/teams") })}>Accept invitation</button></section></div>;
+  return <div className="mx-auto max-w-xl py-12"><section className={`${card} text-center`}><p className="text-xs font-bold uppercase tracking-[.16em] text-[hsl(var(--primary))]">Team invitation</p><h1 className="mt-3 font-display text-3xl font-extrabold">Ready to take a roster spot?</h1><p className="mt-3 text-sm text-[hsl(var(--muted-foreground))]">Your signed-in verified phone must match the captain’s invitation.</p>{accept.error && <p className="mt-4 rounded-xl bg-[hsl(var(--destructive)/.1)] p-3 text-sm font-semibold text-[hsl(var(--destructive))]">{errorText(accept.error)}</p>}<button className={`${action} mt-5`} disabled={accept.isPending} onClick={() => token && accept.mutate({ token }, { onSuccess: (result) => { void Promise.all([client.invalidateQueries({ queryKey: getListTeamsQueryKey() }), client.invalidateQueries({ queryKey: getGetTeamQueryKey(result.teamId) }), client.invalidateQueries({ queryKey: getGetTeamRosterQueryKey(result.teamId) })]); navigate(`/teams/${result.teamId}`); } })}>{accept.isPending ? "Joining team…" : "Accept invitation"}</button></section></div>;
 }
 
 function GameSummary({ game }: { game: Game }) {

@@ -240,6 +240,10 @@ export interface Standing {
   differential: number;
 }
 
+export type AcceptInvitation200 = {
+  teamId: number;
+};
+
 export type ListGamesParams = {
 teamId?: number;
 date?: string;
