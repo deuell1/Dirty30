@@ -192,6 +192,30 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Game"
+  /scores/{gameId}/confirm:
+    post:
+      operationId: confirmScore
+      tags: [scores]
+      parameters:
+        - $ref: "#/components/parameters/GameId"
+      responses:
+        "204":
+          description: Score finalized
+  /scores/{gameId}/dispute:
+    post:
+      operationId: disputeScore
+      tags: [scores]
+      parameters:
+        - $ref: "#/components/parameters/GameId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DisputeInput"
+      responses:
+        "204":
+          description: Score disputed
 components:
   parameters:
     TeamId:
@@ -290,6 +314,11 @@ components:
         homeScore: { type: integer }
         awayScore: { type: integer }
         status: { type: string, enum: [NOT_SUBMITTED, PENDING_CONFIRMATION, DISPUTED, FINAL] }
+    DisputeInput:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 1000 }
     Standing:
       type: object
       required: [rank, teamName, played, wins, losses, pointsFor, pointsAgainst, differential]

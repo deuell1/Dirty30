@@ -1,4 +1,5 @@
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { SignIn, useAuth } from '@clerk/react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -40,6 +41,8 @@ import {
   getListGamesQueryKey,
   getListTeamsQueryKey,
   useCreateTeam,
+  useConfirmScore,
+  useDisputeScore,
   useGetDashboard,
   useGetGame,
   useGetScoreReviewQueue,
@@ -51,6 +54,7 @@ import {
   useListTeams,
   useSubmitScore,
   useUpdateTeam,
+  setAuthTokenGetter,
   type Dashboard,
   type Game,
   type Player,
@@ -251,6 +255,25 @@ function Review() {
   return <div className="animate-rise"><PageHeading eyebrow="The desk" title="Review queue" detail="A quick commissioner check keeps the standings honest." action={<Badge tone="coral"><CircleAlert className="h-3 w-3" /> {list.length} waiting</Badge>} /><QueryState loading={queue.isLoading} error={queue.error} onRetry={() => void queue.refetch()} empty={!list.length} emptyLabel="No scores waiting for review."><div className="space-y-4">{list.map((game) => <section key={game.id} data-testid={`card-review-${game.id}`} className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 sm:p-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-mono-custom text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--destructive))]">Submitted {formatDate(game.date)}</p><h2 className="mt-2 font-display text-2xl font-bold">{game.homeTeam} <span className="text-[hsl(var(--muted-foreground))]">vs</span> {game.awayTeam}</h2></div><Badge tone="gold">Pending confirmation</Badge></div><div className="mt-5 flex items-center gap-5 rounded-xl bg-[hsl(var(--muted)/.65)] p-4"><div><p className="text-[10px] uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">{game.homeTeam}</p><p className="font-mono-custom text-3xl font-bold">{game.homeScore ?? '—'}</p></div><span className="font-mono-custom text-sm text-[hsl(var(--muted-foreground))]">to</span><div><p className="text-[10px] uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">{game.awayTeam}</p><p className="font-mono-custom text-3xl font-bold">{game.awayScore ?? '—'}</p></div><span className="ml-auto text-xs text-[hsl(var(--muted-foreground))]">{game.venue} · {game.court}</span></div><div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><Button variant="ghost" onClick={() => resolve(game.id)} testId={`button-dispute-${game.id}`}>Flag for follow-up</Button><Button variant="primary" onClick={() => resolve(game.id)} testId={`button-approve-${game.id}`}><Check className="h-4 w-4" /> Approve score</Button></div></section>)}</div></QueryState></div>;
 }
 
+function ReviewPersisted() {
+  const queue = useGetScoreReviewQueue();
+  const confirm = useConfirmScore();
+  const dispute = useDisputeScore();
+  const client = useQueryClient();
+  const [reasons, setReasons] = useState<Record<number, string>>({});
+  const list = (queue.data as Game[] | undefined) ?? [];
+  const refreshLeagueData = (gameId: number) => {
+    void Promise.all([
+      client.invalidateQueries({ queryKey: getGetScoreReviewQueueQueryKey() }),
+      client.invalidateQueries({ queryKey: getGetGameQueryKey(gameId) }),
+      client.invalidateQueries({ queryKey: getGetDashboardQueryKey() }),
+      client.invalidateQueries({ queryKey: getListGamesQueryKey() }),
+      client.invalidateQueries({ queryKey: getGetStandingsQueryKey() }),
+    ]);
+  };
+  return <div className="animate-rise"><PageHeading eyebrow="The desk" title="Review queue" detail="A quick commissioner check keeps the standings honest." action={<Badge tone="coral"><CircleAlert className="h-3 w-3" /> {list.length} waiting</Badge>} /><QueryState loading={queue.isLoading} error={queue.error || confirm.error || dispute.error} onRetry={() => void queue.refetch()} empty={!list.length} emptyLabel="No scores waiting for review."><div className="space-y-4">{list.map((game) => <section key={game.id} data-testid={`card-review-${game.id}`} className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 sm:p-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-mono-custom text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--destructive))]">Submitted {formatDate(game.date)}</p><h2 className="mt-2 font-display text-2xl font-bold">{game.homeTeam} <span className="text-[hsl(var(--muted-foreground))]">vs</span> {game.awayTeam}</h2></div><Badge tone="gold">Pending confirmation</Badge></div><div className="mt-5 flex items-center gap-5 rounded-xl bg-[hsl(var(--muted)/.65)] p-4"><div><p className="text-[10px] uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">{game.homeTeam}</p><p className="font-mono-custom text-3xl font-bold">{game.homeScore ?? '—'}</p></div><span className="font-mono-custom text-sm text-[hsl(var(--muted-foreground))]">to</span><div><p className="text-[10px] uppercase tracking-[.12em] text-[hsl(var(--muted-foreground))]">{game.awayTeam}</p><p className="font-mono-custom text-3xl font-bold">{game.awayScore ?? '—'}</p></div><span className="ml-auto text-xs text-[hsl(var(--muted-foreground))]">{game.venue} · {game.court}</span></div><label className="mt-4 block text-xs font-bold">Dispute reason<input data-testid={`input-dispute-reason-${game.id}`} value={reasons[game.id] ?? ''} onChange={(event) => setReasons((current) => ({ ...current, [game.id]: event.target.value }))} placeholder="Required only if disputing" className="mt-2 min-h-11 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm outline-none focus:border-[hsl(var(--primary))]" /></label><div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><Button variant="ghost" disabled={dispute.isPending || (reasons[game.id]?.trim().length ?? 0) < 3} onClick={() => dispute.mutate({ gameId: game.id, data: { reason: reasons[game.id]!.trim() } }, { onSuccess: () => refreshLeagueData(game.id) })} testId={`button-dispute-${game.id}`}>Flag for follow-up</Button><Button variant="primary" disabled={confirm.isPending} onClick={() => confirm.mutate({ gameId: game.id }, { onSuccess: () => refreshLeagueData(game.id) })} testId={`button-approve-${game.id}`}><Check className="h-4 w-4" /> Approve score</Button></div></section>)}</div></QueryState></div>;
+}
+
 function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [season, setSeason] = useState('Spring 2025');
@@ -267,14 +290,30 @@ function Login() {
   return <div className="noise flex min-h-[100dvh] items-center justify-center bg-[hsl(var(--sidebar))] p-5 text-[hsl(var(--sidebar-foreground))]"><div className="grid w-full max-w-4xl overflow-hidden rounded-[28px] bg-[hsl(var(--card))] text-[hsl(var(--foreground))] shadow-[0_24px_80px_hsl(var(--sidebar)/.45)] md:grid-cols-[.9fr_1.1fr]"><div className="relative hidden overflow-hidden bg-[hsl(var(--primary))] p-10 text-[hsl(var(--primary-foreground))] md:block"><LeagueLogo /><div className="absolute -bottom-12 -left-12 h-52 w-52 rounded-full border-[26px] border-[hsl(var(--accent)/.24)]" /><div className="relative mt-32"><p className="font-mono-custom text-[10px] uppercase tracking-[.2em] text-[hsl(var(--accent))]">Your game-day home base</p><h1 className="mt-4 font-display text-6xl font-extrabold leading-[.88] tracking-[-.07em]">Keep<br />it<br /><span className="text-[hsl(var(--accent))]">moving.</span></h1><p className="mt-6 max-w-[220px] text-sm leading-6 text-[hsl(var(--primary-foreground)/.7)]">Schedules, scores, and the league's version of the truth.</p></div></div><div className="p-7 sm:p-12"><div className="mb-12 md:hidden"><LeagueLogo /></div><p className="font-mono-custom text-[10px] font-bold uppercase tracking-[.2em] text-[hsl(var(--primary))]">Welcome back</p><h2 className="mt-3 font-display text-4xl font-extrabold tracking-[-.06em]">Get in the room.</h2><p className="mt-3 text-sm leading-6 text-[hsl(var(--muted-foreground))]">Use your league email to set up your game-day account.</p><form onSubmit={submit} className="mt-8 space-y-4"><label className="block text-sm font-bold">League email<input data-testid="input-login-email" type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@league.com" className="mt-2 min-h-12 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 outline-none focus:border-[hsl(var(--primary))]" /></label><Button type="submit" disabled={submitted} className="w-full" testId="button-login">{submitted ? 'Opening the room…' : <>Continue <ArrowRight className="h-4 w-4" /></>}</Button></form><p className="mt-8 text-center text-xs text-[hsl(var(--muted-foreground))]">By continuing, you agree to keep the chirps friendly.</p></div></div></div>;
 }
 
-function Router() {
+function ClerkLogin() {
+  return <div className="noise flex min-h-[100dvh] items-center justify-center bg-[hsl(var(--sidebar))] p-5">
+    <SignIn routing="hash" />
+  </div>;
+}
+
+function AuthBoundary() {
+  const { isLoaded, isSignedIn, getToken } = useAuth();
+  useEffect(() => {
+    setAuthTokenGetter(() => getToken());
+    return () => setAuthTokenGetter(null);
+  }, [getToken]);
+  if (!isLoaded) return <div className="noise grid min-h-[100dvh] place-items-center bg-[hsl(var(--sidebar))] text-sm font-bold text-[hsl(var(--sidebar-foreground))]">Opening the league room…</div>;
+  return isSignedIn ? <Router /> : <ClerkLogin />;
+}
+
+ function Router() {
   const [location] = useLocation();
   if (location === '/login') return <Switch><Route path="/login" component={Login} /><Route component={NotFound} /></Switch>;
-  return <Shell><ErrorBoundary resetKey={location}><Switch><Route path="/" component={Home} /><Route path="/teams/:teamId" component={TeamDetail} /><Route path="/teams" component={Teams} /><Route path="/schedule/:gameId" component={GameDetail} /><Route path="/schedule" component={Schedule} /><Route path="/standings" component={Standings} /><Route path="/review" component={Review} /><Route path="/settings" component={SettingsPage} /><Route component={NotFound} /></Switch></ErrorBoundary></Shell>;
+  return <Shell><ErrorBoundary resetKey={location}><Switch><Route path="/" component={Home} /><Route path="/teams/:teamId" component={TeamDetail} /><Route path="/teams" component={Teams} /><Route path="/schedule/:gameId" component={GameDetail} /><Route path="/schedule" component={Schedule} /><Route path="/standings" component={Standings} /><Route path="/review" component={ReviewPersisted} /><Route path="/settings" component={SettingsPage} /><Route component={NotFound} /></Switch></ErrorBoundary></Shell>;
 }
 
 function App() {
-  return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Router /></WouterRouter><Toaster /></TooltipProvider></QueryClientProvider>;
+  return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><AuthBoundary /></WouterRouter><Toaster /></TooltipProvider></QueryClientProvider>;
 }
 
 export default App;

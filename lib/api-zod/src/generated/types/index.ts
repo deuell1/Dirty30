@@ -8,6 +8,7 @@
 
 export * from './dashboard';
 export * from './dashboardRole';
+export * from './disputeInput';
 export * from './game';
 export * from './gameStatus';
 export * from './healthStatus';

@@ -21,6 +21,7 @@ import type {
 
 import type {
   Dashboard,
+  DisputeInput,
   Game,
   HealthStatus,
   ListGamesParams,
@@ -926,4 +927,135 @@ export function useGetScoreReviewQueue<TData = Awaited<ReturnType<typeof getScor
 
 
 
+
+export const getConfirmScoreUrl = (gameId: number,) => {
+
+
+
+
+  return `/api/scores/${gameId}/confirm`
+}
+
+export const confirmScore = async (gameId: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getConfirmScoreUrl(gameId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getConfirmScoreMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmScore>>, TError,{gameId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof confirmScore>>, TError,{gameId: number}, TContext> => {
+
+const mutationKey = ['confirmScore'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmScore>>, {gameId: number}> = (props) => {
+          const {gameId} = props ?? {};
+
+          return  confirmScore(gameId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConfirmScoreMutationResult = NonNullable<Awaited<ReturnType<typeof confirmScore>>>
+
+    export type ConfirmScoreMutationError = ErrorType<unknown>
+
+    export const useConfirmScore = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmScore>>, TError,{gameId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof confirmScore>>,
+        TError,
+        {gameId: number},
+        TContext
+      > => {
+      return useMutation(getConfirmScoreMutationOptions(options));
+    }
+
+export const getDisputeScoreUrl = (gameId: number,) => {
+
+
+
+
+  return `/api/scores/${gameId}/dispute`
+}
+
+export const disputeScore = async (gameId: number,
+    disputeInput: DisputeInput, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDisputeScoreUrl(gameId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(disputeInput)
+  }
+);}
+
+
+
+
+
+export const getDisputeScoreMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof disputeScore>>, TError,{gameId: number;data: BodyType<DisputeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof disputeScore>>, TError,{gameId: number;data: BodyType<DisputeInput>}, TContext> => {
+
+const mutationKey = ['disputeScore'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof disputeScore>>, {gameId: number;data: BodyType<DisputeInput>}> = (props) => {
+          const {gameId,data} = props ?? {};
+
+          return  disputeScore(gameId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DisputeScoreMutationResult = NonNullable<Awaited<ReturnType<typeof disputeScore>>>
+    export type DisputeScoreMutationBody = BodyType<DisputeInput>
+    export type DisputeScoreMutationError = ErrorType<unknown>
+
+    export const useDisputeScore = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof disputeScore>>, TError,{gameId: number;data: BodyType<DisputeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof disputeScore>>,
+        TError,
+        {gameId: number;data: BodyType<DisputeInput>},
+        TContext
+      > => {
+      return useMutation(getDisputeScoreMutationOptions(options));
+    }
 

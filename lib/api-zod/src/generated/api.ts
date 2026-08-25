@@ -238,3 +238,26 @@ export const GetScoreReviewQueueResponseItem = zod.object({
 export const GetScoreReviewQueueResponse = zod.array(GetScoreReviewQueueResponseItem)
 
 
+export const ConfirmScoreParams = zod.object({
+  "gameId": zod.coerce.number().int()
+})
+
+export const ConfirmScoreResponse = zod.void()
+
+
+export const DisputeScoreParams = zod.object({
+  "gameId": zod.coerce.number().int()
+})
+
+export const disputeScoreBodyReasonMin = 3;
+export const disputeScoreBodyReasonMax = 1000;
+
+
+
+export const DisputeScoreBody = zod.object({
+  "reason": zod.string().min(disputeScoreBodyReasonMin).max(disputeScoreBodyReasonMax)
+})
+
+export const DisputeScoreResponse = zod.void()
+
+

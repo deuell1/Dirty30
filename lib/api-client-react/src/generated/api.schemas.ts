@@ -120,6 +120,14 @@ export interface Score {
   status: ScoreStatus;
 }
 
+export interface DisputeInput {
+  /**
+     * @minLength 3
+     * @maxLength 1000
+     */
+  reason: string;
+}
+
 export interface Standing {
   rank: number;
   teamName: string;
