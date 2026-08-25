@@ -10,7 +10,7 @@
     "test": "pnpm -r --if-present run test",
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
-    "verify": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run build"
+    "verify": "pnpm --filter @workspace/api-spec run codegen && git diff --exit-code -- lib/api-client-react/src/generated lib/api-zod/src/generated && pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run build"
   },
   "private": true,
   "dependencies": {

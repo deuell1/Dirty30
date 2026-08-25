@@ -39,6 +39,9 @@ export async function resolveCurrentUser(req: Request, res: Response, next: Next
     if (byExternalAuthId && byPhone && byExternalAuthId.id !== byPhone.id) {
       return res.status(409).json({ error: "This verified phone number is already linked to a different league account" });
     }
+    const bootstrapPhoneRaw = process.env.BOOTSTRAP_COMMISSIONER_PHONE?.trim();
+    const bootstrapPhone = bootstrapPhoneRaw ? normalizeUsPhone(bootstrapPhoneRaw) : undefined;
+    const isBootstrapCommissioner = bootstrapPhone === normalizedPhone;
     const existing = byExternalAuthId ?? byPhone;
     if (existing) {
       if (existing.phone !== normalizedPhone) {
@@ -49,15 +52,14 @@ export async function resolveCurrentUser(req: Request, res: Response, next: Next
         email: verifiedEmail ?? null,
         firstName: existing.firstName || firstName,
         lastName: existing.lastName || lastName,
+        ...(isBootstrapCommissioner ? { role: "COMMISSIONER" as const, accessState: "ACTIVE" as const, active: true } : {}),
       }).where(eq(users.id, existing.id)).returning();
-      if (!updated?.active) return res.status(403).json({ error: "This league account is inactive" });
+      if (!updated?.active || updated.accessState === "DISABLED") return res.status(403).json({ error: "League access is unavailable" });
       res.locals.currentUser = updated;
       return next();
     }
 
-    const bootstrapPhoneRaw = process.env.BOOTSTRAP_COMMISSIONER_PHONE?.trim();
-    const bootstrapPhone = bootstrapPhoneRaw ? normalizeUsPhone(bootstrapPhoneRaw) : undefined;
-    const role = bootstrapPhone && bootstrapPhone === normalizedPhone ? "COMMISSIONER" : "PLAYER";
+    const role = isBootstrapCommissioner ? "COMMISSIONER" : "PLAYER";
     const [created] = await db.insert(users).values({
       externalAuthId: userId,
       phone: normalizedPhone,
@@ -65,8 +67,9 @@ export async function resolveCurrentUser(req: Request, res: Response, next: Next
       firstName,
       lastName,
       role,
+      accessState: isBootstrapCommissioner ? "ACTIVE" : "PENDING",
     }).returning();
-    if (!created?.active) return res.status(403).json({ error: "This league account is inactive" });
+    if (!created?.active || created.accessState === "DISABLED") return res.status(403).json({ error: "League access is unavailable" });
     res.locals.currentUser = created;
     return next();
   } catch (error) {
@@ -75,8 +78,15 @@ export async function resolveCurrentUser(req: Request, res: Response, next: Next
 }
 
 export function requireCommissioner(req: Request, res: Response, next: NextFunction) {
-  if (res.locals.currentUser?.role !== "COMMISSIONER") {
+  if (res.locals.currentUser?.accessState !== "ACTIVE" || res.locals.currentUser.role !== "COMMISSIONER") {
     return res.status(403).json({ error: "Commissioner access required" });
+  }
+  return next();
+}
+
+export function requireActiveUser(_req: Request, res: Response, next: NextFunction) {
+  if (res.locals.currentUser?.accessState !== "ACTIVE") {
+    return res.status(403).json({ error: "An active league invitation is required" });
   }
   return next();
 }

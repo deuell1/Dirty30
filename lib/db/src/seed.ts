@@ -9,10 +9,10 @@ async function firstOrCreate<T extends { id: number }>(find: () => Promise<T | u
 async function seedUser(externalAuthId: string, phone: string, firstName: string, lastName: string, role: "COMMISSIONER" | "CAPTAIN" | "PLAYER") {
   const existing = await db.query.users.findFirst({ where: or(eq(users.phone, phone), eq(users.externalAuthId, externalAuthId)) });
   if (existing) {
-    const [updated] = await db.update(users).set({ phone, firstName, lastName, role }).where(eq(users.id, existing.id)).returning();
+    const [updated] = await db.update(users).set({ phone, firstName, lastName, role, accessState: "ACTIVE", active: true }).where(eq(users.id, existing.id)).returning();
     return updated!;
   }
-  return (await db.insert(users).values({ externalAuthId, phone, firstName, lastName, role }).returning())[0]!;
+  return (await db.insert(users).values({ externalAuthId, phone, firstName, lastName, role, accessState: "ACTIVE" }).returning())[0]!;
 }
 
 async function seedMembership(teamId: number, userId: number, membershipRole: "CAPTAIN" | "PLAYER") {

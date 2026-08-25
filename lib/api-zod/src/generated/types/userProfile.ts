@@ -5,6 +5,7 @@
  * Dirty-30 league management API
  * OpenAPI spec version: 0.1.0
  */
+import type { UserProfileAccessState } from './userProfileAccessState';
 import type { UserProfileRole } from './userProfileRole';
 
 export interface UserProfile {
@@ -15,4 +16,5 @@ export interface UserProfile {
   /** @pattern ^\+[1-9]\d{1,14}$ */
   phone: string;
   role: UserProfileRole;
+  accessState: UserProfileAccessState;
 }

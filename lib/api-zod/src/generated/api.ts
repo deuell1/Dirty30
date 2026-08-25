@@ -80,7 +80,8 @@ export const GetCurrentUserResponse = zod.object({
   "firstName": zod.string(),
   "lastName": zod.string(),
   "phone": zod.string().regex(getCurrentUserResponsePhoneRegExp),
-  "role": zod.enum(['COMMISSIONER', 'CAPTAIN', 'PLAYER'])
+  "role": zod.enum(['COMMISSIONER', 'CAPTAIN', 'PLAYER']),
+  "accessState": zod.enum(['PENDING', 'ACTIVE', 'DISABLED'])
 })
 
 
@@ -102,7 +103,8 @@ export const UpdateCurrentUserResponse = zod.object({
   "firstName": zod.string(),
   "lastName": zod.string(),
   "phone": zod.string().regex(updateCurrentUserResponsePhoneRegExp),
-  "role": zod.enum(['COMMISSIONER', 'CAPTAIN', 'PLAYER'])
+  "role": zod.enum(['COMMISSIONER', 'CAPTAIN', 'PLAYER']),
+  "accessState": zod.enum(['PENDING', 'ACTIVE', 'DISABLED'])
 })
 
 

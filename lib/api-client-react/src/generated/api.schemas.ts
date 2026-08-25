@@ -73,6 +73,15 @@ export const UserProfileRole = {
   PLAYER: 'PLAYER',
 } as const;
 
+export type UserProfileAccessState = typeof UserProfileAccessState[keyof typeof UserProfileAccessState];
+
+
+export const UserProfileAccessState = {
+  PENDING: 'PENDING',
+  ACTIVE: 'ACTIVE',
+  DISABLED: 'DISABLED',
+} as const;
+
 export interface UserProfile {
   id: number;
   email?: string;
@@ -81,6 +90,7 @@ export interface UserProfile {
   /** @pattern ^\+[1-9]\d{1,14}$ */
   phone: string;
   role: UserProfileRole;
+  accessState: UserProfileAccessState;
 }
 
 export interface ProfileInput {

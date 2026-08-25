@@ -2,12 +2,13 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useAuth, useClerk } from "@clerk/react";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import {
-  DashboardRole, getGetDashboardQueryKey, getGetGameQueryKey, getGetScoreReviewQueueQueryKey, getGetStandingsQueryKey, getListGamesQueryKey, getListTeamsQueryKey,
+  DashboardRole, getGetCurrentUserQueryKey, getGetDashboardQueryKey, getGetGameQueryKey, getGetScoreReviewQueueQueryKey, getGetStandingsQueryKey, getListGamesQueryKey, getListTeamsQueryKey,
   useConfirmScore, useCreateTeam, useDisputeScore, useGetCurrentUser, useGetScoreReviewQueue, useGetStandings,
   useHealthCheck, useListTeams, setAuthTokenGetter, type Game, type Standing, type Team,
 } from "@workspace/api-client-react";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { PhoneAuthScreen } from "@/components/phone-auth";
+import { ScoreActions } from "@/components/score-actions";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { DashboardPage, GameDetailPage, InvitationPage, ProfilePage, SchedulePage, TeamDetailPage } from "@/components/beta-pages";
@@ -68,17 +69,30 @@ function ReviewPersisted() {
   const client = useQueryClient();
   const [reasons, setReasons] = useState<Record<number, string>>({});
   const refresh = (gameId: number) => void Promise.all([client.invalidateQueries({ queryKey: getGetScoreReviewQueueQueryKey() }), client.invalidateQueries({ queryKey: getListGamesQueryKey() }), client.invalidateQueries({ queryKey: getGetStandingsQueryKey() }), client.invalidateQueries({ queryKey: getGetGameQueryKey(gameId) }), client.invalidateQueries({ queryKey: getGetDashboardQueryKey() })]);
-  return <section><p className="text-xs font-bold uppercase text-[hsl(var(--primary))]">Commissioner desk</p><h1 className="mb-6 font-display text-4xl font-extrabold">Review queue</h1><div className="space-y-3">{(queue.data as Game[] | undefined)?.map((game) => <article key={game.id} className="rounded-2xl border p-5"><h2 className="font-display text-2xl font-bold">{game.homeTeam} {game.homeScore} — {game.awayScore} {game.awayTeam}</h2><p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">{game.venue} · {game.court}</p><input aria-label={`Dispute reason for ${game.id}`} value={reasons[game.id] ?? ""} onChange={(event) => setReasons({ ...reasons, [game.id]: event.target.value })} className="mt-4 w-full rounded-lg border p-2" placeholder="Dispute reason" /><div className="mt-3 flex gap-2"><Button onClick={() => confirm.mutate({ gameId: game.id }, { onSuccess: () => refresh(game.id) })}>Confirm score</Button><Button disabled={(reasons[game.id]?.trim().length ?? 0) < 3} onClick={() => dispute.mutate({ gameId: game.id, data: { reason: reasons[game.id].trim() } }, { onSuccess: () => refresh(game.id) })}>Dispute</Button></div></article>) ?? <p>No scores waiting for review.</p>}</div></section>;
+  return <section><p className="text-xs font-bold uppercase text-[hsl(var(--primary))]">Commissioner desk</p><h1 className="mb-6 font-display text-4xl font-extrabold">Review queue</h1><div className="space-y-3">{(queue.data as Game[] | undefined)?.map((game) => <article key={game.id} className="rounded-2xl border p-5"><div className="flex items-start justify-between gap-3"><div><h2 className="font-display text-2xl font-bold">{game.homeTeam} {game.homeScore} — {game.awayScore} {game.awayTeam}</h2><p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">{game.venue} · {game.court}</p></div><Link href={`/schedule/${game.id}`} className="text-sm font-bold text-[hsl(var(--primary))]">Game detail</Link></div>{game.status === "DISPUTED" ? <><p className="mt-4 rounded-xl bg-[hsl(var(--destructive)/.08)] p-3 text-sm"><strong>Disputed score.</strong> {game.disputeReason ?? "A captain requested commissioner review."}</p><ScoreActions game={game} /></> : <><input aria-label={`Dispute reason for ${game.id}`} value={reasons[game.id] ?? ""} onChange={(event) => setReasons({ ...reasons, [game.id]: event.target.value })} className="mt-4 w-full rounded-lg border p-2" placeholder="Dispute reason" /><div className="mt-3 flex gap-2"><Button onClick={() => confirm.mutate({ gameId: game.id }, { onSuccess: () => refresh(game.id) })}>Confirm score</Button><Button disabled={(reasons[game.id]?.trim().length ?? 0) < 3} onClick={() => dispute.mutate({ gameId: game.id, data: { reason: reasons[game.id].trim() } }, { onSuccess: () => refresh(game.id) })}>Dispute</Button></div></>}</article>) ?? <p>No scores waiting for review.</p>}</div></section>;
 }
 
 export function AuthBoundary() {
   const { isLoaded, isSignedIn, getToken } = useAuth();
   const [location, setLocation] = useLocation();
+  const profile = useGetCurrentUser({ query: { enabled: Boolean(isSignedIn), queryKey: getGetCurrentUserQueryKey() } });
   useEffect(() => { setAuthTokenGetter(() => getToken()); return () => setAuthTokenGetter(null); }, [getToken]);
   useEffect(() => { if (!isSignedIn) return; const invite = window.sessionStorage.getItem("dirty30-invitation-return"); if (invite && invite !== location) { window.sessionStorage.removeItem("dirty30-invitation-return"); setLocation(invite); } }, [isSignedIn, location, setLocation]);
   if (!isLoaded) return <div className="grid min-h-[100dvh] place-items-center">Opening the league room…</div>;
   if (!isSignedIn) { if (location.startsWith("/invite/")) window.sessionStorage.setItem("dirty30-invitation-return", location); return <PhoneAuthScreen />; }
+  if (profile.data?.accessState === "PENDING") return <PendingAccessScreen />;
+  if (profile.error) return <AccessUnavailableScreen />;
   return <Router />;
+}
+
+function PendingAccessScreen() {
+  const { signOut } = useClerk();
+  return <main className="grid min-h-[100dvh] place-items-center bg-[hsl(var(--background))] p-5"><section className="max-w-md rounded-3xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-7 text-center shadow-sm"><p className="text-xs font-bold uppercase tracking-[.16em] text-[hsl(var(--primary))]">Dirty-30 closed beta</p><h1 className="mt-3 font-display text-3xl font-extrabold">Waiting for an invitation</h1><p className="mt-4 text-sm leading-6 text-[hsl(var(--muted-foreground))]">This league is invitation-only. Ask your captain or commissioner to invite the verified phone number you used to sign in.</p><button onClick={() => void signOut()} className="mt-6 min-h-11 rounded-xl bg-[hsl(var(--primary))] px-4 text-sm font-bold text-[hsl(var(--primary-foreground))]">Sign out</button></section></main>;
+}
+
+function AccessUnavailableScreen() {
+  const { signOut } = useClerk();
+  return <main className="grid min-h-[100dvh] place-items-center bg-[hsl(var(--background))] p-5"><section className="max-w-md rounded-3xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-7 text-center"><h1 className="font-display text-3xl font-extrabold">League access unavailable</h1><p className="mt-4 text-sm text-[hsl(var(--muted-foreground))]">This account cannot access league information. Contact a commissioner if you need help.</p><button onClick={() => void signOut()} className="mt-6 min-h-11 rounded-xl bg-[hsl(var(--primary))] px-4 text-sm font-bold text-[hsl(var(--primary-foreground))]">Sign out</button></section></main>;
 }
 
 function Router() {

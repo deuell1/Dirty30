@@ -8,6 +8,8 @@ import { logger } from "./lib/logger";
 import { CLERK_PROXY_PATH, clerkProxyMiddleware } from "./middlewares/clerkProxyMiddleware";
 
 const app: Express = express();
+const isProduction = process.env.NODE_ENV === "production";
+const productionOrigin = process.env.APP_ORIGIN;
 
 app.use(
   pinoHttp({
@@ -28,7 +30,7 @@ app.use(
     },
   }),
 );
-app.use(cors());
+app.use(cors(isProduction ? { origin: productionOrigin, credentials: true } : undefined));
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 app.use("/api", healthRouter);
 app.use(clerkMiddleware());

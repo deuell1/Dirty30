@@ -33,6 +33,7 @@ export * from './team';
 export * from './teamInput';
 export * from './teamUpdate';
 export * from './userProfile';
+export * from './userProfileAccessState';
 export * from './userProfileRole';
 export * from './venue';
 export * from './venueInput';

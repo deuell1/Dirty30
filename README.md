@@ -1,3 +1,32 @@
+## Closed beta access and production operations
+
+Dirty-30 is invitation-only. A verified phone number without a matching roster invitation receives **PENDING** access and may only inspect its own profile or accept its own invitation. Accepted invitations atomically create the membership and promote that account to **ACTIVE**. Commissioners can explicitly disable or restore accounts; disabled accounts cannot access data or accept invitations.
+
+### Authorization matrix
+
+| Endpoint group | Required access |
+| --- | --- |
+| `/api/healthz`, `/api/readyz` | Public operational endpoint |
+| `/api/me`, `POST /api/invitations/:token/accept` | Authenticated PENDING or ACTIVE account |
+| Dashboard, teams, rosters, schedule, standings, score detail | ACTIVE account |
+| Venues, courts, draft/publish/cancel schedule, account access changes, score resolution/correction | Commissioner |
+| Team invitations and membership changes | Commissioner or captain of that team |
+| Submit a score | Commissioner or captain of a participating team |
+| Confirm or dispute a score | Commissioner or captain of the opposing team |
+
+The executable route map is maintained in `artifacts/api-server/src/services/authorizationMatrix.ts`. Phone numbers are not returned by general roster views; pending accounts cannot enumerate league records.
+
+### Production migration and readiness
+
+Apply committed migrations in production with:
+
+```sh
+pnpm --filter @workspace/db run migrate
+```
+
+Do not use `drizzle-kit push` for production and do not seed production automatically. Production startup requires `DATABASE_URL`, `CLERK_SECRET_KEY`, `VITE_CLERK_PUBLISHABLE_KEY`, `BOOTSTRAP_COMMISSIONER_PHONE`, and `APP_ORIGIN`; values are never logged. `APP_ORIGIN` is the only allowed browser origin for production CORS. `/api/healthz` is liveness-only; `/api/readyz` reports generic readiness after a database probe and production-variable check.
+
+Live phone OTP smoke testing remains **BLOCKED** until a user-owned Clerk tenant with SMS phone OTP is connected. Configure Phone number as the sole sign-in identifier, enable SMS verification, disable email/password and social options, add supported Clerk publishable/secret keys and the bootstrap phone as Replit Secrets, and use Clerk test phone numbers/codes for staging before enabling paid production SMS.
 # Dirty-30
 
 Dirty-30 is a mobile-first home base for an adult recreational beer league. It keeps teams, rosters, schedules, submitted scores, review status, and standings in one phone-friendly application.

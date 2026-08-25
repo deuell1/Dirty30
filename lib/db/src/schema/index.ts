@@ -18,6 +18,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
 export const userRoleEnum = pgEnum("user_role", ["COMMISSIONER", "CAPTAIN", "PLAYER"]);
+export const userAccessStateEnum = pgEnum("user_access_state", ["PENDING", "ACTIVE", "DISABLED"]);
 export const membershipRoleEnum = pgEnum("membership_role", ["CAPTAIN", "PLAYER"]);
 export const invitationStatusEnum = pgEnum("invitation_status", ["PENDING", "ACCEPTED", "CANCELLED", "EXPIRED"]);
 export const gameStatusEnum = pgEnum("game_status", ["DRAFT", "PUBLISHED", "CANCELLED", "PENDING_CONFIRMATION", "DISPUTED", "FINAL"]);
@@ -35,6 +36,7 @@ export const users = pgTable("users", {
   lastName: varchar("last_name", { length: 100 }).notNull().default(""),
   phone: varchar("phone", { length: 40 }).notNull().unique(),
   role: userRoleEnum("role").notNull().default("PLAYER"),
+  accessState: userAccessStateEnum("access_state").notNull().default("PENDING"),
   active: boolean("active").notNull().default(true),
   ...timestamps,
 });

@@ -14,7 +14,7 @@ import {
   auditEvents, courts, db, games, leagues, playerInvitations, seasons, teamMemberships,
   teams, users, venues, type User,
 } from "@workspace/db";
-import { currentUser, requireCommissioner, resolveCurrentUser } from "../middlewares/auth";
+import { currentUser, requireActiveUser, requireCommissioner, resolveCurrentUser } from "../middlewares/auth";
 import { lockRoster, MAX_ROSTER_POSITIONS, requireRosterSlot } from "../services/rosterCapacity";
 import { normalizeUsPhone } from "../lib/phone";
 import { canCommissionerDirectScore } from "../services/scorePolicy";
@@ -30,6 +30,11 @@ type ApiGame = {
 
 const router: IRouter = Router();
 router.use(resolveCurrentUser);
+router.use((req, res, next) => {
+  const pendingAllowed = req.method === "GET" && req.path === "/me"
+    || req.method === "POST" && /^\/invitations\/[^/]+\/accept$/.test(req.path);
+  return pendingAllowed ? next() : requireActiveUser(req, res, next);
+});
 const awayTeams = alias(teams, "away_teams");
 
 const scheduleInput = z.object({
@@ -43,6 +48,7 @@ const profileInput = z.object({ firstName: z.string().trim().min(1).max(100), la
 const captainInput = z.object({ userId: z.number().int().positive() });
 const venueInput = z.object({ name: z.string().trim().min(1).max(160), address: z.string().trim().max(1000).default("") });
 const courtInput = z.object({ name: z.string().trim().min(1).max(100) });
+const accountAccessInput = z.object({ accessState: z.enum(["ACTIVE", "DISABLED"]) });
 
 function statusForGame(status: typeof games.$inferSelect.status): ApiGame["status"] {
   if (status === "CANCELLED") return "CANCELLED";
@@ -170,7 +176,7 @@ router.get("/dashboard", async (_req, res, next) => {
 });
 router.get("/me", (req, res) => {
   const user = currentUser(req, res);
-  res.json({ id: user.id, email: user.email ?? undefined, firstName: user.firstName, lastName: user.lastName, phone: user.phone, role: user.role });
+  res.json({ id: user.id, email: user.email ?? undefined, firstName: user.firstName, lastName: user.lastName, phone: user.phone, role: user.role, accessState: user.accessState });
 });
 router.patch("/me", async (req, res, next) => {
   try {
@@ -179,6 +185,16 @@ router.patch("/me", async (req, res, next) => {
     const [updated] = await db.update(users).set(input).where(eq(users.id, user.id)).returning();
     await audit(user.id, "user", user.id, "PROFILE_UPDATED", user, updated);
     return res.json({ id: updated!.id, email: updated!.email ?? undefined, firstName: updated!.firstName, lastName: updated!.lastName, phone: updated!.phone, role: updated!.role });
+  } catch (error) { return next(error); }
+});
+router.patch("/users/:userId/access", requireCommissioner, async (req, res, next) => {
+  try {
+    const userId = z.coerce.number().int().positive().parse(req.params.userId);
+    const input = accountAccessInput.parse(req.body);
+    const [updated] = await db.update(users).set({ accessState: input.accessState, active: input.accessState === "ACTIVE" }).where(eq(users.id, userId)).returning();
+    if (!updated) return res.status(404).json({ error: "League account not found" });
+    await audit(currentUser(req, res).id, "user", userId, input.accessState === "DISABLED" ? "ACCOUNT_DISABLED" : "ACCOUNT_RESTORED");
+    return res.json({ id: updated.id, accessState: updated.accessState });
   } catch (error) { return next(error); }
 });
 router.get("/teams", async (req, res, next) => { try { res.json(ListTeamsResponse.parse(await teamList(currentUser(req, res)))); } catch (error) { next(error); } });
@@ -264,6 +280,7 @@ router.post("/invitations/:token/accept", async (req, res, next) => {
         await requireRosterSlot(tx, invitation.teamId);
         const existing = await tx.query.teamMemberships.findFirst({ where: and(eq(teamMemberships.teamId, invitation.teamId), eq(teamMemberships.userId, actor.id), eq(teamMemberships.active, true)) });
         if (!existing) await tx.insert(teamMemberships).values({ teamId: invitation.teamId, userId: actor.id, membershipRole: "PLAYER" });
+        await tx.update(users).set({ accessState: "ACTIVE", active: true }).where(eq(users.id, actor.id));
         return updated;
       });
     });
@@ -348,7 +365,7 @@ router.post("/schedule/:gameId/publish", requireCommissioner, async (req, res, n
 router.post("/schedule/:gameId/cancel", requireCommissioner, async (req, res, next) => { try { const gameId = z.coerce.number().int().positive().parse(req.params.gameId); const [game] = await db.update(games).set({ status: "CANCELLED" }).where(and(eq(games.id, gameId), ne(games.status, "FINAL"))).returning(); if (!game) return res.status(409).json({ error: "Final or missing games cannot be cancelled" }); await audit(currentUser(req, res).id, "game", gameId, "CANCELLED"); return res.status(204).end(); } catch (error) { return next(error); } });
 router.get("/standings", async (_req, res, next) => { try { const rows = (await teamList()).filter((team) => team.active).map((team) => ({ teamName: team.name, played: 0, wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, differential: 0 })); const map = new Map(rows.map((row) => [row.teamName, row])); for (const game of await apiGames()) { if (game.status !== "FINAL" || game.homeScore === null || game.awayScore === null) continue; const home = map.get(game.homeTeam); const away = map.get(game.awayTeam); if (!home || !away) continue; home.played++; away.played++; home.pointsFor += game.homeScore; home.pointsAgainst += game.awayScore; away.pointsFor += game.awayScore; away.pointsAgainst += game.homeScore; if (game.homeScore > game.awayScore) { home.wins++; away.losses++; } else if (game.awayScore > game.homeScore) { away.wins++; home.losses++; } } res.json(GetStandingsResponse.parse(rows.map((row) => ({ ...row, differential: row.pointsFor - row.pointsAgainst })).sort((a,b) => b.wins-a.wins || b.differential-a.differential || b.pointsFor-a.pointsFor).map((row,index) => ({ rank:index+1,...row })))); } catch (error) { next(error); } });
 router.post("/scores/:gameId", async (req, res, next) => { try { const { gameId } = SubmitScoreParams.parse(req.params); const input = SubmitScoreBody.parse(req.body); const game = await db.query.games.findFirst({ where: eq(games.id, gameId) }); if (!game) return res.status(404).json({ error: "Game not found" }); if (game.status !== "PUBLISHED") return res.status(409).json({ error: "Only published, unsubmitted games can receive a score" }); const actor = currentUser(req, res); await assertCaptainOrCommissioner(actor.id, [game.homeTeamId, game.awayTeamId]); const [updated] = await db.update(games).set({ ...input, status: "PENDING_CONFIRMATION", submittedByUserId: actor.id, submittedAt: new Date() }).where(and(eq(games.id, gameId), eq(games.status, "PUBLISHED"))).returning(); if (!updated) return res.status(409).json({ error: "This score was updated by another user" }); await audit(actor.id, "game", gameId, "SCORE_SUBMITTED", game, updated); return res.json(SubmitScoreResponse.parse({ gameId, homeScore: updated.homeScore!, awayScore: updated.awayScore!, status: "PENDING_CONFIRMATION" })); } catch (error) { return next(error); } });
-router.get("/scores/review", requireCommissioner, async (_req, res, next) => { try { res.json(GetScoreReviewQueueResponse.parse((await apiGames()).filter((game) => game.status === "PENDING_CONFIRMATION" || game.status === "DISPUTED"))); } catch (error) { next(error); } });
+router.get("/scores/review", requireCommissioner, async (req, res, next) => { try { res.json(GetScoreReviewQueueResponse.parse((await apiGames(undefined, undefined, currentUser(req, res))).filter((game) => game.status === "PENDING_CONFIRMATION" || game.status === "DISPUTED"))); } catch (error) { next(error); } });
 router.post("/scores/:gameId/confirm", async (req, res, next) => { try { const gameId = z.coerce.number().int().positive().parse(req.params.gameId); const game = await db.query.games.findFirst({ where: eq(games.id, gameId) }); if (!game || game.status !== "PENDING_CONFIRMATION") return res.status(409).json({ error: "This score cannot be confirmed" }); const actor = currentUser(req, res); await assertOpposingCaptainOrCommissioner(actor.id, game); const [updated] = await db.update(games).set({ status: "FINAL", confirmedByUserId: actor.id, confirmedAt: new Date() }).where(and(eq(games.id, gameId), eq(games.status, "PENDING_CONFIRMATION"))).returning(); if (!updated) return res.status(409).json({ error: "This score was updated by another user" }); await audit(actor.id, "game", gameId, "SCORE_CONFIRMED", game, updated); return res.status(204).end(); } catch (error) { return next(error); } });
 router.post("/scores/:gameId/dispute", async (req, res, next) => { try { const gameId = z.coerce.number().int().positive().parse(req.params.gameId); const input = disputeInput.parse(req.body); const game = await db.query.games.findFirst({ where: eq(games.id, gameId) }); if (!game) return res.status(404).json({ error: "Game not found" }); if (game.status !== "PENDING_CONFIRMATION") return res.status(409).json({ error: "Only submitted scores can be disputed" }); const actor = currentUser(req, res); await assertOpposingCaptainOrCommissioner(actor.id, game); const [updated] = await db.update(games).set({ status: "DISPUTED", disputeReason: input.reason, disputedByUserId: actor.id, disputedAt: new Date() }).where(and(eq(games.id, gameId), eq(games.status, "PENDING_CONFIRMATION"))).returning(); if (!updated) return res.status(409).json({ error: "This score was updated by another user" }); await audit(actor.id, "game", gameId, "SCORE_DISPUTED", game, updated); return res.status(204).end(); } catch (error) { return next(error); } });
 router.post("/scores/:gameId/resolve", requireCommissioner, async (req, res, next) => { try { const gameId = z.coerce.number().int().positive().parse(req.params.gameId); const input = SubmitScoreBody.parse(req.body); const game = await db.query.games.findFirst({ where: eq(games.id, gameId) }); if (!game || game.status !== "DISPUTED") return res.status(409).json({ error: "Only disputed scores can be resolved" }); const actor = currentUser(req, res); await db.update(games).set({ ...input, status: "FINAL", resolvedByUserId: actor.id, resolvedAt: new Date() }).where(eq(games.id, gameId)); await audit(actor.id, "game", gameId, "SCORE_RESOLVED", game, input); return res.status(204).end(); } catch (error) { return next(error); } });
