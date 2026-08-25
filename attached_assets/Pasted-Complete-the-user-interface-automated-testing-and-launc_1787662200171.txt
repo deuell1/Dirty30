@@ -1,0 +1,378 @@
+Complete the user interface, automated testing, and launch verification for the existing Dirty 30 beta in deuell1/Dirty30.
+
+Preserve the working phone-OTP authentication, PostgreSQL schema, Drizzle migrations, roster-capacity service, API authorization, OpenAPI structure, React/Vite interface, Express backend and existing visual design.
+
+Do not rewrite completed backend services, change authentication back to email, redesign the application, add new product scope, or create another mockup.
+
+Primary objective
+
+Connect every existing beta backend workflow to a working mobile interface and prove the application with automated and manual acceptance tests.
+
+A backend route without a usable authorized interface does not count as a completed beta feature.
+
+1. Current-user and role handling
+
+Use the existing /me endpoint as the frontend source of truth.
+
+Remove remaining hardcoded:
+
+* User names
+* Initials
+* Commissioner labels
+* Role assumptions
+* Roster permissions
+* Review-queue permissions
+* Dashboard messages
+
+Required behavior:
+
+Commissioner
+
+Can see and use:
+
+* Team administration
+* Captain assignment
+* Roster administration
+* Venue and court administration
+* Schedule creation, editing, publication and cancellation
+* Score-review and dispute-resolution controls
+* Final-score correction controls
+
+Captain
+
+Can see and use:
+
+* Their own team roster controls
+* Phone invitation controls
+* Score submission for their games
+* Score confirmation or dispute when submitted by the opposing team
+
+Player
+
+Can see:
+
+* Team roster
+* Published schedule
+* Game details
+* Standings
+* Personal profile
+
+Player must not see commissioner or captain mutation controls.
+
+The server remains authoritative even when a button is hidden.
+
+2. Complete team and roster interface
+
+Update the team-detail screen to provide authorized controls for:
+
+* Assign or replace captain
+* Invite player by United States mobile number
+* Display and copy invitation link
+* Regenerate invitation link
+* Cancel pending invitation
+* Remove active player
+* Activate or deactivate team
+* Display occupied positions as X of 8
+* Clearly distinguish active members from pending invitations
+
+Show full phone numbers only to:
+
+* Commissioner
+* Captain assigned to that team
+* The user viewing their own profile
+
+Mask phone numbers for other users.
+
+Roster errors must display clearly:
+
+* Roster full
+* Duplicate invitation
+* Invalid phone number
+* Expired invitation
+* Unauthorized action
+* Invitation already accepted
+* Invitation already cancelled
+
+Invitation acceptance must work from a shareable route such as:
+
+/invite/:token
+
+If the user is signed out, preserve the invitation token through phone sign-up/sign-in and return them to the acceptance screen afterward.
+
+After acceptance, show the joined team and refresh the roster.
+
+3. Complete commissioner schedule interface
+
+Add a mobile commissioner administration experience for:
+
+Venues
+
+* List venues
+* Create venue
+* Edit venue
+* Activate or deactivate venue
+
+Courts
+
+* List courts for a venue
+* Create court
+* Edit court
+* Activate or deactivate court
+
+Games
+
+* Create draft game
+* Select home team
+* Select away team
+* Select venue
+* Select court
+* Select date and start time
+* Edit draft or published game
+* Publish draft
+* Cancel eligible game
+* Clearly display status
+
+Use the generated OpenAPI hooks. Do not call handwritten duplicate endpoints.
+
+Display server conflict errors for:
+
+* Same team playing itself
+* Team already scheduled
+* Court already scheduled
+* Inactive records
+* Date outside active season
+* Invalid date or time
+
+Draft games must be visible only to commissioner.
+
+4. Complete score interface
+
+On game detail, show the correct action based on role, team and game status.
+
+Captain of participating team
+
+For PUBLISHED game:
+
+* Submit home and away score
+
+For PENDING_CONFIRMATION submitted by opposing team:
+
+* Confirm
+* Dispute with required reason
+
+For PENDING_CONFIRMATION submitted by their own team:
+
+* Show “Awaiting opposing captain”
+
+For DISPUTED:
+
+* Show dispute reason and “Awaiting commissioner resolution”
+
+For FINAL:
+
+* Read-only result
+
+Commissioner
+
+Allow:
+
+* Direct score entry
+* Confirm pending score where permitted by the backend
+* View dispute reason
+* Resolve disputed score with corrected values
+* Correct final score with confirmation dialog
+* See that changes are audited
+
+Remove the obsolete client-only Review implementation. Keep only the persistent API-backed review interface.
+
+Every successful score mutation must refresh:
+
+* Game detail
+* Schedule
+* Dashboard
+* Review queue
+* Standings
+
+Display actual API failures instead of removing cards locally.
+
+5. Complete personal profile
+
+Add a functional profile screen for:
+
+* First name
+* Last name
+* Verified phone number, read-only
+* Optional email
+
+Phone changes must not be editable directly. Explain that a verified phone change requires commissioner support and Clerk verification.
+
+6. Automated tests
+
+The repository currently has only the phone-normalization test. Add a meaningful beta test suite.
+
+Use Vitest and Supertest for backend tests. Use a dedicated test database or isolated transactional strategy. Mock Clerk identity verification in automated tests; never send real SMS.
+
+Add tests for:
+
+Authentication
+
+* Unauthenticated protected request returns 401.
+* Unverified phone is rejected.
+* Verified phone resolves the correct user.
+* Exact bootstrap phone becomes commissioner.
+* Different phone does not become commissioner.
+* Duplicate phone cannot link to two accounts.
+
+Authorization
+
+* Player cannot mutate roster.
+* Captain cannot manage another team.
+* Captain cannot access commissioner schedule controls.
+* Captain cannot submit an unrelated score.
+* Submitting team cannot confirm its own score.
+* Opposing captain can confirm or dispute.
+
+Roster
+
+* Active membership counts toward 8.
+* Pending invitation counts toward 8.
+* Ninth position is rejected.
+* Concurrent invitations cannot exceed 8.
+* Duplicate phone invitation is rejected.
+* Cancellation opens a position.
+* Removal opens a position.
+* Expiration opens a position.
+* Wrong phone cannot accept invitation.
+* Token cannot be reused.
+
+Schedule
+
+* Valid draft game can be created.
+* Draft is commissioner-only.
+* Game can be published.
+* Published game is visible.
+* Team conflict is rejected.
+* Court conflict is rejected.
+* Invalid season date is rejected.
+* Eligible game can be cancelled.
+* Final game cannot be cancelled.
+
+Scores and standings
+
+* Score submission creates pending confirmation.
+* Opposing captain confirmation creates final score.
+* Dispute records required reason.
+* Commissioner resolution creates final score.
+* Final correction creates an audit event with before and after values.
+* Only final games affect standings.
+* Tie-break sorting is deterministic.
+
+Phone interface
+
+Add focused component tests for:
+
+* Phone input validation
+* Sign-in and sign-up flow selection
+* Verification-code state
+* Resend cooldown
+* Invitation return route
+* Role-based action visibility
+
+7. Quality commands
+
+Add root scripts for:
+
+pnpm test
+pnpm lint
+pnpm typecheck
+pnpm build
+pnpm verify
+
+pnpm verify must run, in order:
+
+1. Formatting check
+2. Lint
+3. Strict type checking
+4. Tests
+5. Production build
+
+Add ESLint configuration appropriate for the workspace.
+
+Do not weaken TypeScript settings to make checks pass.
+
+Remove:
+
+* Obsolete client-only review code
+* Dead duplicate page implementations
+* Pasted prompt text files that are not runtime assets
+* Unused mockup artifacts that are not required by Replit
+
+Do not delete the selected Dirty 30 icon/image asset if it is intended for production branding.
+
+8. Clerk launch blocker
+
+Do not fall back to email authentication.
+
+The current Replit-managed Clerk tenant reports that phone/SMS is unavailable. Complete all code and mocked tests regardless, then provide exact manual steps required to make production phone OTP operational.
+
+Report:
+
+* Whether a user-owned Clerk instance is required
+* Required Clerk plan
+* Required phone sign-up setting
+* Required phone sign-in setting
+* Required verification setting
+* Required United States SMS allowlist setting
+* Which Clerk keys must be replaced in Replit Secrets
+* How to test with Clerk test phone numbers without sending real SMS
+
+Do not claim production authentication works until a real Clerk development or production tenant successfully completes phone OTP.
+
+9. Launch verification
+
+After code completion:
+
+1. Apply migrations.
+2. Run the seed twice.
+3. Run pnpm verify.
+4. Start the production configuration.
+5. Verify /api/healthz.
+6. Test commissioner UI on a mobile viewport.
+7. Test captain UI on a mobile viewport.
+8. Test player UI on a mobile viewport.
+9. Create and accept a phone invitation using Clerk test credentials if available.
+10. Create and publish a game.
+11. Submit and confirm a score.
+12. Dispute and resolve another score.
+13. Restart the server.
+14. Verify all records remain.
+15. Confirm standings use final games only.
+
+Clearly separate:
+
+* Passed automated checks
+* Passed manual checks
+* Checks blocked by Clerk configuration
+* Checks not executed
+
+Update the README with accurate results.
+
+Commit and push to main with:
+
+Complete mobile beta UI and acceptance testing
+
+At completion report:
+
+* UI workflows implemented
+* Tests added and passing count
+* Formatting, lint, type-check and build results
+* Migration and seed results
+* Mobile workflow results
+* Persistence-after-restart result
+* Clerk configuration blocker
+* Required Replit Secrets
+* Deployment status and URL
+* Commit SHA
+* Any remaining blocker
+
+Do not start chat, waivers, payments, availability, substitute pool, temporary players, automatic schedule generation or native packaging.
