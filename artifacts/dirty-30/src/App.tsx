@@ -63,6 +63,9 @@ import {
   setAuthTokenGetter,
   useRegenerateInvitation,
   useAcceptInvitation,
+  useAssignTeamCaptain,
+  useSetTeamActive,
+  useRemoveTeamPlayer,
   type Dashboard,
   type Game,
   type Player,
@@ -74,6 +77,9 @@ import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
 import { PhoneAuthScreen } from '@/components/phone-auth';
+import { CommissionerScheduleAdmin } from '@/components/commissioner-schedule';
+import { ScoreActions } from '@/components/score-actions';
+import { DashboardPage, GameDetailPage, InvitationPage, ProfilePage, SchedulePage, TeamDetailPage } from '@/components/beta-pages';
 import { Link, Route, Switch, useLocation, useParams, Router as WouterRouter } from 'wouter';
 
 const queryClient = new QueryClient();
@@ -113,6 +119,13 @@ function initials(name: string) {
 function normalizeUsPhoneInput(value: string) {
   const phone = parsePhoneNumberFromString(value.trim(), 'US');
   return phone?.isValid() && phone.country === 'US' ? phone.number : null;
+}
+function apiError(error: unknown, fallback = 'The league desk could not complete that action.') {
+  if (typeof error === 'object' && error) {
+    const value = error as { data?: { error?: string }; message?: string };
+    return value.data?.error ?? value.message ?? fallback;
+  }
+  return fallback;
 }
 
 function Badge({ children, tone = 'neutral' }: { children: ReactNode; tone?: 'neutral' | 'gold' | 'teal' | 'coral' | 'dark' }) {
@@ -156,11 +169,14 @@ function Shell({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const health = useHealthCheck();
   const currentUser = useGetCurrentUser().data;
+  const review = useGetScoreReviewQueue({ query: { queryKey: getGetScoreReviewQueueQueryKey(), enabled: currentUser?.role === DashboardRole.COMMISSIONER } });
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dark, setDark] = useState(false);
   const { signOut } = useClerk();
   const displayName = currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : 'League member';
   const displayInitials = initials(displayName);
+  const isCommissioner = currentUser?.role === DashboardRole.COMMISSIONER;
+  const reviewCount = isCommissioner ? ((review.data as Game[] | undefined)?.length ?? 0) : 0;
   const active = (href: string) => href === '/' ? location === '/' : location.startsWith(href);
   const toggleDark = () => {
     setDark((current) => {
@@ -172,11 +188,11 @@ function Shell({ children }: { children: ReactNode }) {
     <aside className={cx('fixed inset-y-0 left-0 z-30 flex w-[252px] flex-col bg-[hsl(var(--sidebar))] px-5 py-6 text-[hsl(var(--sidebar-foreground))] transition-transform duration-300 lg:translate-x-0', mobileOpen ? 'translate-x-0' : '-translate-x-full')}>
       <div className="flex items-center justify-between"><LeagueLogo /><button data-testid="button-close-menu" onClick={() => setMobileOpen(false)} className="rounded-lg p-2 text-[hsl(var(--sidebar-foreground)/.65)] hover:bg-[hsl(var(--sidebar-accent))] lg:hidden"><X className="h-5 w-5" /></button></div>
        <div className="mt-12"><p className="mb-3 px-3 font-mono-custom text-[9px] font-bold uppercase tracking-[.18em] text-[hsl(var(--sidebar-foreground)/.42)]">League room</p><nav className="space-y-1">{navItems.map(({ href, label, icon: Icon }) => <Link key={href} href={href} data-testid={`link-nav-${label.toLowerCase()}`} onClick={() => setMobileOpen(false)} className={cx('flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold transition', active(href) ? 'bg-[hsl(var(--sidebar-primary))] text-[hsl(var(--sidebar-primary-foreground))]' : 'text-[hsl(var(--sidebar-foreground)/.67)] hover:bg-[hsl(var(--sidebar-accent))] hover:text-[hsl(var(--sidebar-foreground))]')}><Icon className="h-[18px] w-[18px]" />{label}{href === '/schedule' && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[hsl(var(--destructive))]" />}</Link>)}</nav></div>
-      <div className="mt-auto space-y-1"><Link href="/review" data-testid="link-nav-review" className={cx('flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold transition', active('/review') ? 'bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-foreground))]' : 'text-[hsl(var(--sidebar-foreground)/.67)] hover:bg-[hsl(var(--sidebar-accent))]')}><ClipboardCheck className="h-[18px] w-[18px]" />Review queue<Badge tone="gold">2</Badge></Link><Link href="/settings" data-testid="link-nav-settings" className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-[hsl(var(--sidebar-foreground)/.67)] transition hover:bg-[hsl(var(--sidebar-accent))] hover:text-[hsl(var(--sidebar-foreground))]"><Settings className="h-[18px] w-[18px]" />Settings</Link></div>
+       <div className="mt-auto space-y-1">{isCommissioner && <Link href="/review" data-testid="link-nav-review" className={cx('flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold transition', active('/review') ? 'bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-foreground))]' : 'text-[hsl(var(--sidebar-foreground)/.67)] hover:bg-[hsl(var(--sidebar-accent))]')}><ClipboardCheck className="h-[18px] w-[18px]" />Review queue<Badge tone="gold">{reviewCount}</Badge></Link>}<Link href="/settings" data-testid="link-nav-settings" className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-[hsl(var(--sidebar-foreground)/.67)] transition hover:bg-[hsl(var(--sidebar-accent))] hover:text-[hsl(var(--sidebar-foreground))]"><Settings className="h-[18px] w-[18px]" />Settings</Link></div>
       <div className="mt-5 border-t border-[hsl(var(--sidebar-border))] pt-5"><div className="flex items-center gap-3"><div className="grid h-9 w-9 place-items-center rounded-full bg-[hsl(var(--sidebar-primary))] font-display text-sm font-bold text-[hsl(var(--sidebar-primary-foreground))]">{displayInitials}</div><div className="min-w-0"><p className="truncate text-sm font-bold">{displayName}</p><p className="text-[10px] text-[hsl(var(--sidebar-foreground)/.48)]">{roleLabel(currentUser?.role)}</p></div><button data-testid="button-toggle-theme" onClick={toggleDark} className="ml-auto rounded-lg p-2 text-[hsl(var(--sidebar-foreground)/.52)] hover:bg-[hsl(var(--sidebar-accent))]">{dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}</button></div><button data-testid="button-sign-out" onClick={() => void signOut()} className="mt-4 text-xs font-bold text-[hsl(var(--sidebar-foreground)/.58)] hover:text-[hsl(var(--sidebar-foreground))]">Sign out</button></div>
     </aside>
     {mobileOpen && <button aria-label="Close navigation" data-testid="button-menu-overlay" onClick={() => setMobileOpen(false)} className="fixed inset-0 z-20 bg-[hsl(var(--sidebar)/.45)] lg:hidden" />}
-    <div className="lg:pl-[252px]"><header className="sticky top-0 z-10 flex h-[72px] items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--background)/.91)] px-5 backdrop-blur-md sm:px-8"><button data-testid="button-open-menu" onClick={() => setMobileOpen(true)} className="rounded-xl p-2 text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))] lg:hidden"><Menu className="h-5 w-5" /></button><div className="hidden items-center gap-2 text-xs text-[hsl(var(--muted-foreground))] lg:flex"><span className={cx('h-2 w-2 rounded-full', health.data ? 'bg-[hsl(var(--primary))]' : 'bg-[hsl(var(--accent))]')} />{health.data ? 'League systems online' : 'League room'}</div><div className="ml-auto flex items-center gap-2 sm:gap-4"><Link href="/settings" data-testid="link-header-settings" className="rounded-xl p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]"><Settings className="h-5 w-5" /></Link><div className="hidden h-5 w-px bg-[hsl(var(--border))] sm:block" /><span className="grid h-9 w-9 place-items-center rounded-full bg-[hsl(var(--primary))] font-display text-xs font-bold text-[hsl(var(--primary-foreground))]">JM</span></div></header><main className="mx-auto max-w-[1360px] px-5 py-7 pb-24 sm:px-8 sm:py-10 lg:px-12 lg:pb-12">{children}</main></div>
+     <div className="lg:pl-[252px]"><header className="sticky top-0 z-10 flex h-[72px] items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--background)/.91)] px-5 backdrop-blur-md sm:px-8"><button data-testid="button-open-menu" onClick={() => setMobileOpen(true)} className="rounded-xl p-2 text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))] lg:hidden"><Menu className="h-5 w-5" /></button><div className="hidden items-center gap-2 text-xs text-[hsl(var(--muted-foreground))] lg:flex"><span className={cx('h-2 w-2 rounded-full', health.data ? 'bg-[hsl(var(--primary))]' : 'bg-[hsl(var(--accent))]')} />{health.data ? 'League systems online' : 'League room'}</div><div className="ml-auto flex items-center gap-2 sm:gap-4"><Link href="/settings" data-testid="link-header-settings" className="rounded-xl p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]"><Settings className="h-5 w-5" /></Link><div className="hidden h-5 w-px bg-[hsl(var(--border))] sm:block" /><span data-testid="text-header-initials" className="grid h-9 w-9 place-items-center rounded-full bg-[hsl(var(--primary))] font-display text-xs font-bold text-[hsl(var(--primary-foreground))]">{displayInitials}</span></div></header><main className="mx-auto max-w-[1360px] px-5 py-7 pb-24 sm:px-8 sm:py-10 lg:px-12 lg:pb-12">{children}</main></div>
     <nav className="fixed inset-x-3 bottom-3 z-20 grid grid-cols-4 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card)/.94)] p-1.5 shadow-[0_10px_30px_hsl(var(--foreground)/.12)] backdrop-blur lg:hidden">{navItems.map(({ href, label, icon: Icon }) => <Link href={href} key={href} data-testid={`link-mobile-${label.toLowerCase()}`} className={cx('flex flex-col items-center gap-1 rounded-xl py-2 text-[9px] font-bold uppercase tracking-[.08em]', active(href) ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'text-[hsl(var(--muted-foreground))]')}><Icon className="h-4 w-4" />{label}</Link>)}</nav>
   </div>;
 }
@@ -224,6 +240,9 @@ function TeamDetail() {
   const createInvitation = useCreateInvitation();
   const cancelInvitation = useCancelInvitation();
   const regenerateInvitation = useRegenerateInvitation();
+  const assignCaptain = useAssignTeamCaptain();
+  const setTeamActive = useSetTeamActive();
+  const removePlayer = useRemoveTeamPlayer();
   const currentUser = useGetCurrentUser();
   const client = useQueryClient();
   const [editing, setEditing] = useState(false);
@@ -237,7 +256,8 @@ function TeamDetail() {
     if (!name.trim()) return;
     update.mutate({ teamId, data: { name: name.trim() } }, { onSuccess: (updated) => { client.setQueryData(getGetTeamQueryKey(teamId), updated); void client.invalidateQueries({ queryKey: getListTeamsQueryKey() }); setEditing(false); } });
   };
-  const canManageRoster = currentUser.data?.role === DashboardRole.COMMISSIONER || currentUser.data?.role === DashboardRole.CAPTAIN;
+  const canManageTeam = currentUser.data?.role === DashboardRole.COMMISSIONER;
+  const canManageRoster = Boolean(teamData?.canManageRoster);
   const createInvite = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!invitePhone.trim()) return;
@@ -360,17 +380,30 @@ function InviteAcceptance() {
 
 function AuthBoundary() {
   const { isLoaded, isSignedIn, getToken } = useAuth();
+  const [location, setLocation] = useLocation();
   useEffect(() => {
     setAuthTokenGetter(() => getToken());
     return () => setAuthTokenGetter(null);
   }, [getToken]);
+  useEffect(() => {
+    if (!isSignedIn) return;
+    const invitationPath = window.sessionStorage.getItem('dirty30-invitation-return');
+    if (invitationPath && invitationPath !== location) {
+      window.sessionStorage.removeItem('dirty30-invitation-return');
+      setLocation(invitationPath);
+    }
+  }, [isSignedIn, location, setLocation]);
   if (!isLoaded) return <div className="noise grid min-h-[100dvh] place-items-center bg-[hsl(var(--sidebar))] text-sm font-bold text-[hsl(var(--sidebar-foreground))]">Opening the league room…</div>;
-  return isSignedIn ? <Router /> : <ClerkLogin />;
+  if (!isSignedIn) {
+    if (location.startsWith('/invite/')) window.sessionStorage.setItem('dirty30-invitation-return', location);
+    return <ClerkLogin />;
+  }
+  return <Router />;
 }
 
 function Router() {
   const [location] = useLocation();
-  return <Shell><ErrorBoundary resetKey={location}><Switch><Route path="/invite/:token" component={InviteAcceptance} /><Route path="/" component={Home} /><Route path="/teams/:teamId" component={TeamDetail} /><Route path="/teams" component={Teams} /><Route path="/schedule/:gameId" component={GameDetail} /><Route path="/schedule" component={Schedule} /><Route path="/standings" component={Standings} /><Route path="/review" component={ReviewPersisted} /><Route path="/settings" component={SettingsPage} /><Route component={NotFound} /></Switch></ErrorBoundary></Shell>;
+  return <Shell><ErrorBoundary resetKey={location}><Switch><Route path="/invite/:token" component={InvitationPage} /><Route path="/" component={DashboardPage} /><Route path="/teams/:teamId" component={TeamDetailPage} /><Route path="/teams" component={Teams} /><Route path="/schedule/:gameId" component={GameDetailPage} /><Route path="/schedule" component={SchedulePage} /><Route path="/standings" component={Standings} /><Route path="/review" component={ReviewPersisted} /><Route path="/settings" component={ProfilePage} /><Route component={NotFound} /></Switch></ErrorBoundary></Shell>;
 }
 
 function App() {

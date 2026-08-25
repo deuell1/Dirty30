@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useClerk } from "@clerk/react";
 import { useSignIn, useSignUp } from "@clerk/react/legacy";
-import { parsePhoneNumberFromString } from "libphonenumber-js";
 import { ArrowLeft, ArrowRight, RefreshCw, ShieldCheck } from "lucide-react";
+import { normalizePhoneForAuth } from "./phone-flow";
 
 type Flow = "signIn" | "signUp";
 type Stage = "phone" | "code";
@@ -13,12 +13,6 @@ function clerkMessage(error: unknown) {
     if (typeof message === "string") return message;
   }
   return "We could not verify that code. Check it and try again.";
-}
-
-function normalizePhone(value: string) {
-  const phone = parsePhoneNumberFromString(value.trim(), "US");
-  if (!phone?.isValid() || phone.country !== "US") throw new Error("Enter a valid United States mobile number.");
-  return phone.number;
 }
 
 export function PhoneAuthScreen() {
@@ -50,7 +44,7 @@ export function PhoneAuthScreen() {
     setPending(true);
     setError(undefined);
     try {
-      const normalizedPhone = normalizePhone(phone);
+      const normalizedPhone = normalizePhoneForAuth(phone);
       if (flow === "signIn") {
         const attempt = await signIn.create({ identifier: normalizedPhone });
         const factor = attempt.supportedFirstFactors?.find((candidate) => candidate.strategy === "phone_code");

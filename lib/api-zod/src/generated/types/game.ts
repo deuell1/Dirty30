@@ -23,4 +23,10 @@ export interface Game {
   homeScore?: number | null;
   /** @nullable */
   awayScore?: number | null;
+  scoreSubmittedByCurrentUser?: boolean;
+  /** @nullable */
+  disputeReason?: string | null;
+  canSubmitScore?: boolean;
+  canConfirmOrDisputeScore?: boolean;
+  canManageScore?: boolean;
 }

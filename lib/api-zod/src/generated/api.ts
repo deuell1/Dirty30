@@ -36,7 +36,12 @@ export const GetDashboardResponse = zod.object({
   "status": zod.enum(['SCHEDULED', 'CANCELLED', 'FINAL', 'PENDING_CONFIRMATION', 'DISPUTED']),
   "published": zod.boolean(),
   "homeScore": zod.int().nullish(),
-  "awayScore": zod.int().nullish()
+  "awayScore": zod.int().nullish(),
+  "scoreSubmittedByCurrentUser": zod.boolean().optional(),
+  "disputeReason": zod.string().nullish(),
+  "canSubmitScore": zod.boolean().optional(),
+  "canConfirmOrDisputeScore": zod.boolean().optional(),
+  "canManageScore": zod.boolean().optional()
 }),zod.null()]),
   "attentionItems": zod.array(zod.string()),
   "recentResults": zod.array(zod.object({
@@ -52,7 +57,12 @@ export const GetDashboardResponse = zod.object({
   "status": zod.enum(['SCHEDULED', 'CANCELLED', 'FINAL', 'PENDING_CONFIRMATION', 'DISPUTED']),
   "published": zod.boolean(),
   "homeScore": zod.int().nullish(),
-  "awayScore": zod.int().nullish()
+  "awayScore": zod.int().nullish(),
+  "scoreSubmittedByCurrentUser": zod.boolean().optional(),
+  "disputeReason": zod.string().nullish(),
+  "canSubmitScore": zod.boolean().optional(),
+  "canConfirmOrDisputeScore": zod.boolean().optional(),
+  "canManageScore": zod.boolean().optional()
 }))
 })
 
@@ -100,7 +110,8 @@ export const ListTeamsResponseItem = zod.object({
   "name": zod.string(),
   "captainName": zod.string(),
   "playerCount": zod.int(),
-  "active": zod.boolean()
+  "active": zod.boolean(),
+  "canManageRoster": zod.boolean().optional()
 })
 export const ListTeamsResponse = zod.array(ListTeamsResponseItem)
 
@@ -121,7 +132,8 @@ export const CreateTeamResponse = zod.object({
   "name": zod.string(),
   "captainName": zod.string(),
   "playerCount": zod.int(),
-  "active": zod.boolean()
+  "active": zod.boolean(),
+  "canManageRoster": zod.boolean().optional()
 })
 
 
@@ -134,7 +146,8 @@ export const GetTeamResponse = zod.object({
   "name": zod.string(),
   "captainName": zod.string(),
   "playerCount": zod.int(),
-  "active": zod.boolean()
+  "active": zod.boolean(),
+  "canManageRoster": zod.boolean().optional()
 })
 
 
@@ -156,7 +169,8 @@ export const UpdateTeamResponse = zod.object({
   "name": zod.string(),
   "captainName": zod.string(),
   "playerCount": zod.int(),
-  "active": zod.boolean()
+  "active": zod.boolean(),
+  "canManageRoster": zod.boolean().optional()
 })
 
 
@@ -201,7 +215,8 @@ export const SetTeamActiveResponse = zod.object({
   "name": zod.string(),
   "captainName": zod.string(),
   "playerCount": zod.int(),
-  "active": zod.boolean()
+  "active": zod.boolean(),
+  "canManageRoster": zod.boolean().optional()
 })
 
 
@@ -276,7 +291,12 @@ export const ListGamesResponseItem = zod.object({
   "status": zod.enum(['SCHEDULED', 'CANCELLED', 'FINAL', 'PENDING_CONFIRMATION', 'DISPUTED']),
   "published": zod.boolean(),
   "homeScore": zod.int().nullish(),
-  "awayScore": zod.int().nullish()
+  "awayScore": zod.int().nullish(),
+  "scoreSubmittedByCurrentUser": zod.boolean().optional(),
+  "disputeReason": zod.string().nullish(),
+  "canSubmitScore": zod.boolean().optional(),
+  "canConfirmOrDisputeScore": zod.boolean().optional(),
+  "canManageScore": zod.boolean().optional()
 })
 export const ListGamesResponse = zod.array(ListGamesResponseItem)
 
@@ -302,7 +322,12 @@ export const CreateGameResponse = zod.object({
   "status": zod.enum(['SCHEDULED', 'CANCELLED', 'FINAL', 'PENDING_CONFIRMATION', 'DISPUTED']),
   "published": zod.boolean(),
   "homeScore": zod.int().nullish(),
-  "awayScore": zod.int().nullish()
+  "awayScore": zod.int().nullish(),
+  "scoreSubmittedByCurrentUser": zod.boolean().optional(),
+  "disputeReason": zod.string().nullish(),
+  "canSubmitScore": zod.boolean().optional(),
+  "canConfirmOrDisputeScore": zod.boolean().optional(),
+  "canManageScore": zod.boolean().optional()
 })
 
 
@@ -323,7 +348,12 @@ export const GetGameResponse = zod.object({
   "status": zod.enum(['SCHEDULED', 'CANCELLED', 'FINAL', 'PENDING_CONFIRMATION', 'DISPUTED']),
   "published": zod.boolean(),
   "homeScore": zod.int().nullish(),
-  "awayScore": zod.int().nullish()
+  "awayScore": zod.int().nullish(),
+  "scoreSubmittedByCurrentUser": zod.boolean().optional(),
+  "disputeReason": zod.string().nullish(),
+  "canSubmitScore": zod.boolean().optional(),
+  "canConfirmOrDisputeScore": zod.boolean().optional(),
+  "canManageScore": zod.boolean().optional()
 })
 
 
@@ -352,7 +382,12 @@ export const UpdateGameResponse = zod.object({
   "status": zod.enum(['SCHEDULED', 'CANCELLED', 'FINAL', 'PENDING_CONFIRMATION', 'DISPUTED']),
   "published": zod.boolean(),
   "homeScore": zod.int().nullish(),
-  "awayScore": zod.int().nullish()
+  "awayScore": zod.int().nullish(),
+  "scoreSubmittedByCurrentUser": zod.boolean().optional(),
+  "disputeReason": zod.string().nullish(),
+  "canSubmitScore": zod.boolean().optional(),
+  "canConfirmOrDisputeScore": zod.boolean().optional(),
+  "canManageScore": zod.boolean().optional()
 })
 
 
@@ -538,7 +573,12 @@ export const GetScoreReviewQueueResponseItem = zod.object({
   "status": zod.enum(['SCHEDULED', 'CANCELLED', 'FINAL', 'PENDING_CONFIRMATION', 'DISPUTED']),
   "published": zod.boolean(),
   "homeScore": zod.int().nullish(),
-  "awayScore": zod.int().nullish()
+  "awayScore": zod.int().nullish(),
+  "scoreSubmittedByCurrentUser": zod.boolean().optional(),
+  "disputeReason": zod.string().nullish(),
+  "canSubmitScore": zod.boolean().optional(),
+  "canConfirmOrDisputeScore": zod.boolean().optional(),
+  "canManageScore": zod.boolean().optional()
 })
 export const GetScoreReviewQueueResponse = zod.array(GetScoreReviewQueueResponseItem)
 

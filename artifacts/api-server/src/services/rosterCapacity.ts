@@ -10,6 +10,10 @@ export class RosterCapacityError extends Error {
   }
 }
 
+export function occupiedRosterPositions(activeMemberships: number, pendingInvitations: number) {
+  return activeMemberships + pendingInvitations;
+}
+
 type Transaction = Parameters<Parameters<typeof import("@workspace/db").db.transaction>[0]>[0];
 
 export async function lockRoster<T>(
@@ -29,6 +33,6 @@ export async function requireRosterSlot(tx: Transaction, teamId: number) {
     tx.select({ count: sql<number>`count(*)` }).from(teamMemberships).where(and(eq(teamMemberships.teamId, teamId), eq(teamMemberships.active, true))),
     tx.select({ count: sql<number>`count(*)` }).from(playerInvitations).where(and(eq(playerInvitations.teamId, teamId), eq(playerInvitations.status, "PENDING"), gt(playerInvitations.expiresAt, new Date()))),
   ]);
-  const occupied = Number(memberCount[0]?.count ?? 0) + Number(pendingCount[0]?.count ?? 0);
+  const occupied = occupiedRosterPositions(Number(memberCount[0]?.count ?? 0), Number(pendingCount[0]?.count ?? 0));
   if (occupied >= MAX_ROSTER_POSITIONS) throw new RosterCapacityError();
 }

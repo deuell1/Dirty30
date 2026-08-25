@@ -92,3 +92,26 @@ For authentication checks, use Clerk’s documented test-phone and test-code con
 ## Deployment
 
 Use the managed artifact deployment. It supplies service routing and environment secrets; do not use a local filesystem or in-memory process state for production data. Before publishing, validate the deployment database schema through Replit’s Publish flow, configure the production Clerk tenant for the required phone OTP settings, and confirm a verified-phone sign-in for the intended commissioner.
+
+## Beta launch verification report
+
+**Completed on August 25, 2026**
+
+### Passed
+
+- `pnpm verify` completed successfully: formatter gate, ESLint, workspace typechecking, Vitest, API production build, and web production build.
+- Automated tests passed: 8 API tests cover phone normalization, roster occupancy rules, the public health endpoint, and unauthenticated API rejection; 3 web tests cover US-phone normalization and resend cooldown behavior without sending SMS.
+- Development API and web workflows restarted cleanly after the final build. The API is listening and `/api/healthz` is publicly available.
+- Mobile browser verification passed at a 390px viewport: the signed-out app displays only US phone/SMS access, has no email/password/username/social controls, gives a local invalid-phone error, does not clip primary controls, and has no runtime console errors.
+- The web UI uses server-derived roles and permissions for commissioner, captain, and player affordances; roster capacity uses active memberships plus pending unexpired invitations; invitation tokens survive the signed-out sign-in boundary.
+- Commissioner screens support venues, courts, draft games, publishing, cancellation, and score review/correction flows through generated API hooks. Score mutations refresh game, schedule, dashboard, review, and standings queries.
+
+### Blocked before release
+
+- Live Clerk phone/SMS OTP sign-in, invitation acceptance, and authenticated commissioner/captain/player browser journeys cannot be accepted in this Replit-managed Clerk tenant because phone/SMS authentication is unavailable. This is a tenant capability/configuration prerequisite, not an email fallback case.
+- Before publishing, use a supported Clerk tenant with US SMS OTP enabled, configure the bootstrap commissioner phone, apply the production database migration, and then repeat the role-path, invitation, score-confirmation, dispute, resolution, and final-score correction browser checks.
+
+### Not executed against production
+
+- A published deployment URL and production database verification were not available in this workspace.
+- No real SMS was sent and no real-user Clerk identity was created during testing.

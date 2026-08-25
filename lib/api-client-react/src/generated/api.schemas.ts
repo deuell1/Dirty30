@@ -45,6 +45,12 @@ export interface Game {
   homeScore?: number | null;
   /** @nullable */
   awayScore?: number | null;
+  scoreSubmittedByCurrentUser?: boolean;
+  /** @nullable */
+  disputeReason?: string | null;
+  canSubmitScore?: boolean;
+  canConfirmOrDisputeScore?: boolean;
+  canManageScore?: boolean;
 }
 
 export interface Dashboard {
@@ -107,6 +113,7 @@ export interface Team {
   captainName: string;
   playerCount: number;
   active: boolean;
+  canManageRoster?: boolean;
 }
 
 export interface TeamInput {

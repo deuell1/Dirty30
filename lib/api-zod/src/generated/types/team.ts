@@ -12,4 +12,5 @@ export interface Team {
   captainName: string;
   playerCount: number;
   active: boolean;
+  canManageRoster?: boolean;
 }

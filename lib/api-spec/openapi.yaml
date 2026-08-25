@@ -521,6 +521,7 @@ components:
         captainName: { type: string }
         playerCount: { type: integer }
         active: { type: boolean }
+        canManageRoster: { type: boolean }
     TeamInput:
       type: object
       required: [name]
@@ -606,6 +607,11 @@ components:
         published: { type: boolean }
         homeScore: { type: ["integer", "null"] }
         awayScore: { type: ["integer", "null"] }
+        scoreSubmittedByCurrentUser: { type: boolean }
+        disputeReason: { type: ["string", "null"] }
+        canSubmitScore: { type: boolean }
+        canConfirmOrDisputeScore: { type: boolean }
+        canManageScore: { type: boolean }
     ScoreInput:
       type: object
       required: [homeScore, awayScore]

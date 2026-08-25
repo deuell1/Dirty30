@@ -12,7 +12,7 @@ import {
 } from "@workspace/api-zod";
 import {
   auditEvents, courts, db, games, leagues, playerInvitations, seasons, teamMemberships,
-  teams, users, venues,
+  teams, users, venues, type User,
 } from "@workspace/db";
 import { currentUser, requireCommissioner, resolveCurrentUser } from "../middlewares/auth";
 import { lockRoster, MAX_ROSTER_POSITIONS, requireRosterSlot } from "../services/rosterCapacity";
@@ -23,6 +23,8 @@ type ApiGame = {
   homeTeam: string; awayTeam: string; homeTeamId: number; awayTeamId: number;
   status: "SCHEDULED" | "CANCELLED" | "FINAL" | "PENDING_CONFIRMATION" | "DISPUTED";
   published: boolean; homeScore: number | null; awayScore: number | null;
+  scoreSubmittedByCurrentUser?: boolean; disputeReason?: string | null;
+  canSubmitScore?: boolean; canConfirmOrDisputeScore?: boolean; canManageScore?: boolean;
 };
 
 const router: IRouter = Router();
@@ -63,7 +65,7 @@ async function audit(actorUserId: number, entityType: string, entityId: number, 
   if (!league) throw new Error("No active league configured");
   await db.insert(auditEvents).values({ leagueId: league.id, actorUserId, entityType, entityId, action, beforeData, afterData });
 }
-async function teamList() {
+async function teamList(viewer?: Pick<User, "id" | "role">) {
   const season = await activeSeason();
   const rows = await db.select().from(teams).where(eq(teams.seasonId, season.id)).orderBy(asc(teams.name));
   const memberships = rows.length ? await db.select().from(teamMemberships).where(and(inArray(teamMemberships.teamId, rows.map((item) => item.id)), eq(teamMemberships.active, true))) : [];
@@ -73,10 +75,10 @@ async function teamList() {
     const teamMembers = memberships.filter((membership) => membership.teamId === team.id);
     const captain = teamMembers.find((membership) => membership.membershipRole === "CAPTAIN");
     const person = captain ? byUser.get(captain.userId) : undefined;
-    return { id: team.id, name: team.name, captainName: person ? `${person.firstName} ${person.lastName}`.trim() : "", playerCount: teamMembers.length, active: team.active };
+    return { id: team.id, name: team.name, captainName: person ? `${person.firstName} ${person.lastName}`.trim() : "", playerCount: teamMembers.length, active: team.active, canManageRoster: viewer?.role === "COMMISSIONER" || teamMembers.some((membership) => membership.userId === viewer?.id && membership.membershipRole === "CAPTAIN") };
   });
 }
-async function apiGames(teamId?: number, date?: string): Promise<ApiGame[]> {
+async function apiGames(teamId?: number, date?: string, viewer?: Pick<User, "id" | "role">): Promise<ApiGame[]> {
   const season = await activeSeason();
   const rows = await db.select({ game: games, home: teams, away: teams, venue: venues, court: courts })
     .from(games)
@@ -88,9 +90,14 @@ async function apiGames(teamId?: number, date?: string): Promise<ApiGame[]> {
   // Drizzle aliases are verbose; hydrate away teams separately to keep this join portable.
   const allTeams = await db.select().from(teams).where(eq(teams.seasonId, season.id));
   const byId = new Map(allTeams.map((team) => [team.id, team]));
+  const captainMemberships = viewer?.role === "COMMISSIONER" ? [] : viewer ? await db.select().from(teamMemberships).where(and(eq(teamMemberships.userId, viewer.id), eq(teamMemberships.membershipRole, "CAPTAIN"), eq(teamMemberships.active, true))) : [];
+  const captainTeamIds = new Set(captainMemberships.map((membership) => membership.teamId));
   return rows.map(({ game, home, venue, court }) => {
     const parts = timeParts(game.scheduledAt);
-    return { id: game.id, ...parts, venue: venue.name, court: court.name, homeTeam: home.name, awayTeam: byId.get(game.awayTeamId)?.name ?? "Unknown", homeTeamId: game.homeTeamId, awayTeamId: game.awayTeamId, status: statusForGame(game.status), published: game.status !== "DRAFT", homeScore: game.homeScore, awayScore: game.awayScore };
+    const isCommissioner = viewer?.role === "COMMISSIONER";
+    const isCaptainForGame = captainTeamIds.has(game.homeTeamId) || captainTeamIds.has(game.awayTeamId);
+    const submittedByViewer = viewer ? game.submittedByUserId === viewer.id : undefined;
+    return { id: game.id, ...parts, venue: venue.name, court: court.name, homeTeam: home.name, awayTeam: byId.get(game.awayTeamId)?.name ?? "Unknown", homeTeamId: game.homeTeamId, awayTeamId: game.awayTeamId, status: statusForGame(game.status), published: game.status !== "DRAFT", homeScore: game.homeScore, awayScore: game.awayScore, scoreSubmittedByCurrentUser: submittedByViewer, disputeReason: game.disputeReason, canSubmitScore: Boolean(isCommissioner || isCaptainForGame) && game.status === "PUBLISHED", canConfirmOrDisputeScore: game.status === "PENDING_CONFIRMATION" && Boolean(isCommissioner || (isCaptainForGame && !submittedByViewer)), canManageScore: Boolean(isCommissioner) };
   }).filter((game) => (!teamId || game.homeTeamId === teamId || game.awayTeamId === teamId) && (!date || game.date === date));
 }
 async function assertCaptainOrCommissioner(userId: number, teamIds: number[]) {
@@ -144,7 +151,7 @@ async function withScheduleMutationLock<T>(operation: () => Promise<T>) {
 router.get("/dashboard", async (_req, res, next) => {
   try {
     const user = currentUser(_req, res);
-    const [season, league, allGames, allTeams] = await Promise.all([activeSeason(), db.query.leagues.findFirst({ where: eq(leagues.active, true) }), apiGames(), teamList()]);
+    const [season, league, allGames, allTeams] = await Promise.all([activeSeason(), db.query.leagues.findFirst({ where: eq(leagues.active, true) }), apiGames(undefined, undefined, user), teamList()]);
     const nextGame = allGames.find((game) => game.status === "SCHEDULED") ?? null;
     const attentionItems = [
       ...allGames.filter((game) => game.status === "PENDING_CONFIRMATION").map(() => "1 score awaiting confirmation"),
@@ -166,11 +173,11 @@ router.patch("/me", async (req, res, next) => {
     return res.json({ id: updated!.id, email: updated!.email ?? undefined, firstName: updated!.firstName, lastName: updated!.lastName, phone: updated!.phone, role: updated!.role });
   } catch (error) { return next(error); }
 });
-router.get("/teams", async (_req, res, next) => { try { res.json(ListTeamsResponse.parse(await teamList())); } catch (error) { next(error); } });
+router.get("/teams", async (req, res, next) => { try { res.json(ListTeamsResponse.parse(await teamList(currentUser(req, res)))); } catch (error) { next(error); } });
 router.post("/teams", requireCommissioner, async (req, res, next) => {
   try { const input = CreateTeamBody.parse(req.body); const season = await activeSeason(); const [team] = await db.insert(teams).values({ seasonId: season.id, name: input.name }).returning(); await audit(currentUser(req, res).id, "team", team!.id, "CREATED", undefined, team); res.status(201).json(CreateTeamResponse.parse((await teamList()).find((item) => item.id === team!.id))); } catch (error) { next(error); }
 });
-router.get("/teams/:teamId", async (req, res, next) => { try { const { teamId } = GetTeamParams.parse(req.params); const team = (await teamList()).find((item) => item.id === teamId); if (!team) return res.status(404).json({ error: "Team not found" }); return res.json(GetTeamResponse.parse(team)); } catch (error) { return next(error); } });
+router.get("/teams/:teamId", async (req, res, next) => { try { const { teamId } = GetTeamParams.parse(req.params); const team = (await teamList(currentUser(req, res))).find((item) => item.id === teamId); if (!team) return res.status(404).json({ error: "Team not found" }); return res.json(GetTeamResponse.parse(team)); } catch (error) { return next(error); } });
 router.patch("/teams/:teamId", requireCommissioner, async (req, res, next) => {
   try { const { teamId } = UpdateTeamParams.parse(req.params); const input = UpdateTeamBody.parse(req.body); const before = await db.query.teams.findFirst({ where: eq(teams.id, teamId) }); if (!before) return res.status(404).json({ error: "Team not found" }); await db.update(teams).set(input).where(eq(teams.id, teamId)); const after = await db.query.teams.findFirst({ where: eq(teams.id, teamId) }); await audit(currentUser(req, res).id, "team", teamId, "UPDATED", before, after); return res.json(UpdateTeamResponse.parse((await teamList()).find((item) => item.id === teamId))); } catch (error) { return next(error); }
 });
@@ -325,8 +332,8 @@ router.post("/venues/:venueId/courts", requireCommissioner, async (req, res, nex
 router.patch("/courts/:courtId", requireCommissioner, async (req, res, next) => {
   try { const courtId = z.coerce.number().int().positive().parse(req.params.courtId); const input = courtInput.partial().extend({ active: z.boolean().optional() }).parse(req.body); const [court] = await db.update(courts).set(input).where(eq(courts.id, courtId)).returning(); if (!court) return res.status(404).json({ error: "Court not found" }); await audit(currentUser(req, res).id, "court", courtId, "UPDATED", undefined, court); return res.json(court); } catch (error) { return next(error); }
 });
-router.get("/schedule", async (req, res, next) => { try { const filters = ListGamesQueryParams.parse(req.query); const user = currentUser(req, res); const all = await apiGames(filters.teamId, filters.date); res.json(ListGamesResponse.parse(user.role === "COMMISSIONER" ? all : all.filter((game) => game.published))); } catch (error) { next(error); } });
-router.get("/schedule/:gameId", async (req, res, next) => { try { const { gameId } = GetGameParams.parse(req.params); const game = (await apiGames()).find((item) => item.id === gameId); if (!game || (!game.published && currentUser(req, res).role !== "COMMISSIONER")) return res.status(404).json({ error: "Game not found" }); return res.json(GetGameResponse.parse(game)); } catch (error) { return next(error); } });
+router.get("/schedule", async (req, res, next) => { try { const filters = ListGamesQueryParams.parse(req.query); const user = currentUser(req, res); const all = await apiGames(filters.teamId, filters.date, user); res.json(ListGamesResponse.parse(user.role === "COMMISSIONER" ? all : all.filter((game) => game.published))); } catch (error) { next(error); } });
+router.get("/schedule/:gameId", async (req, res, next) => { try { const { gameId } = GetGameParams.parse(req.params); const user = currentUser(req, res); const game = (await apiGames(undefined, undefined, user)).find((item) => item.id === gameId); if (!game || (!game.published && user.role !== "COMMISSIONER")) return res.status(404).json({ error: "Game not found" }); return res.json(GetGameResponse.parse(game)); } catch (error) { return next(error); } });
 router.post("/schedule", requireCommissioner, async (req, res, next) => { try { const input = scheduleInput.parse(req.body); const game = await withScheduleMutationLock(async () => { const season = await validateGameInput(input); return (await db.insert(games).values({ ...input, seasonId: season.id, scheduledAt: new Date(input.scheduledAt), status: "DRAFT" }).returning())[0]!; }); await audit(currentUser(req, res).id, "game", game.id, "CREATED", undefined, game); const response = (await apiGames()).find((item) => item.id === game.id); return res.status(201).json(GetGameResponse.parse(response)); } catch (error) { return next(error); } });
 router.patch("/schedule/:gameId", requireCommissioner, async (req, res, next) => { try { const gameId = z.coerce.number().int().positive().parse(req.params.gameId); const input = scheduleInput.parse(req.body); const result = await withScheduleMutationLock(async () => { const before = await db.query.games.findFirst({ where: eq(games.id, gameId) }); if (!before || (before.status !== "DRAFT" && before.status !== "PUBLISHED")) throw Object.assign(new Error("Only draft or published games can be edited"), { status: 409 }); await validateGameInput(input, gameId); const [game] = await db.update(games).set({ ...input, scheduledAt: new Date(input.scheduledAt) }).where(eq(games.id, gameId)).returning(); return { before, game: game! }; }); await audit(currentUser(req, res).id, "game", gameId, "UPDATED", result.before, result.game); const response = (await apiGames()).find((item) => item.id === result.game.id); return res.json(GetGameResponse.parse(response)); } catch (error) { return next(error); } });
 router.post("/schedule/:gameId/publish", requireCommissioner, async (req, res, next) => { try { const gameId = z.coerce.number().int().positive().parse(req.params.gameId); const [game] = await db.update(games).set({ status: "PUBLISHED" }).where(and(eq(games.id, gameId), eq(games.status, "DRAFT"))).returning(); if (!game) return res.status(409).json({ error: "Only draft games can be published" }); await audit(currentUser(req, res).id, "game", gameId, "PUBLISHED"); return res.status(204).end(); } catch (error) { return next(error); } });
