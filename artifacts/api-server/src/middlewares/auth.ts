@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { clerkClient, getAuth } from "@clerk/express";
-import { and, eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import { db, users, type User } from "@workspace/db";
 
 declare global {
@@ -21,23 +21,25 @@ export async function resolveCurrentUser(req: Request, res: Response, next: Next
     const { userId } = getAuth(req);
     if (!userId) return res.status(401).json({ error: "Authentication required" });
 
-    const existing = await db.query.users.findFirst({ where: eq(users.externalAuthId, userId) });
-    if (existing) {
-      if (!existing.active) return res.status(403).json({ error: "This league account is inactive" });
-      res.locals.currentUser = existing;
-      return next();
-    }
-
     const clerkUser = await clerkClient.users.getUser(userId);
     const primaryEmail = clerkUser.emailAddresses.find((email) => email.id === clerkUser.primaryEmailAddressId)?.emailAddress;
     if (!primaryEmail) return res.status(400).json({ error: "A primary email address is required" });
 
     const [firstName, lastName] = splitName([clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" "));
+    const normalizedEmail = primaryEmail.toLowerCase();
+    const existing = await db.query.users.findFirst({ where: or(eq(users.externalAuthId, userId), eq(users.email, normalizedEmail)) });
+    if (existing) {
+      const [updated] = await db.update(users).set({ externalAuthId: userId, email: normalizedEmail }).where(eq(users.id, existing.id)).returning();
+      if (!updated?.active) return res.status(403).json({ error: "This league account is inactive" });
+      res.locals.currentUser = updated;
+      return next();
+    }
+
     const bootstrapEmail = process.env.BOOTSTRAP_COMMISSIONER_EMAIL?.trim().toLowerCase();
-    const role = bootstrapEmail && bootstrapEmail === primaryEmail.toLowerCase() ? "COMMISSIONER" : "PLAYER";
+    const role = bootstrapEmail && bootstrapEmail === normalizedEmail ? "COMMISSIONER" : "PLAYER";
     const [created] = await db.insert(users).values({
       externalAuthId: userId,
-      email: primaryEmail.toLowerCase(),
+      email: normalizedEmail,
       firstName,
       lastName,
       role,

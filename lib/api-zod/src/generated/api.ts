@@ -57,6 +57,36 @@ export const GetDashboardResponse = zod.object({
 })
 
 
+export const GetCurrentUserResponse = zod.object({
+  "id": zod.int(),
+  "email": zod.email(),
+  "firstName": zod.string(),
+  "lastName": zod.string(),
+  "phone": zod.string().nullish(),
+  "role": zod.enum(['COMMISSIONER', 'CAPTAIN', 'PLAYER'])
+})
+
+
+
+
+
+
+export const UpdateCurrentUserBody = zod.object({
+  "firstName": zod.string().min(1),
+  "lastName": zod.string().min(1),
+  "phone": zod.string().nullish()
+})
+
+export const UpdateCurrentUserResponse = zod.object({
+  "id": zod.int(),
+  "email": zod.email(),
+  "firstName": zod.string(),
+  "lastName": zod.string(),
+  "phone": zod.string().nullish(),
+  "role": zod.enum(['COMMISSIONER', 'CAPTAIN', 'PLAYER'])
+})
+
+
 /**
  * @summary List league teams
  */
@@ -140,6 +170,84 @@ export const GetTeamRosterResponseItem = zod.object({
 export const GetTeamRosterResponse = zod.array(GetTeamRosterResponseItem)
 
 
+export const AssignTeamCaptainParams = zod.object({
+  "teamId": zod.coerce.number().int()
+})
+
+export const AssignTeamCaptainBody = zod.object({
+  "userId": zod.int()
+})
+
+export const AssignTeamCaptainResponse = zod.void()
+
+
+export const SetTeamActiveParams = zod.object({
+  "teamId": zod.coerce.number().int()
+})
+
+export const SetTeamActiveBody = zod.object({
+  "active": zod.boolean()
+})
+
+export const SetTeamActiveResponse = zod.object({
+  "id": zod.int(),
+  "name": zod.string(),
+  "captainName": zod.string(),
+  "playerCount": zod.int(),
+  "active": zod.boolean()
+})
+
+
+export const CreateInvitationParams = zod.object({
+  "teamId": zod.coerce.number().int()
+})
+
+export const CreateInvitationBody = zod.object({
+  "email": zod.email()
+})
+
+export const CreateInvitationResponse = zod.object({
+  "id": zod.int(),
+  "expiresAt": zod.coerce.date(),
+  "token": zod.string()
+})
+
+
+export const CancelInvitationParams = zod.object({
+  "teamId": zod.coerce.number().int(),
+  "invitationId": zod.coerce.number().int()
+})
+
+export const CancelInvitationResponse = zod.void()
+
+
+export const RegenerateInvitationParams = zod.object({
+  "teamId": zod.coerce.number().int(),
+  "invitationId": zod.coerce.number().int()
+})
+
+export const RegenerateInvitationResponse = zod.object({
+  "id": zod.int(),
+  "expiresAt": zod.coerce.date(),
+  "token": zod.string()
+})
+
+
+export const RemoveTeamPlayerParams = zod.object({
+  "teamId": zod.coerce.number().int(),
+  "userId": zod.coerce.number().int()
+})
+
+export const RemoveTeamPlayerResponse = zod.void()
+
+
+export const AcceptInvitationParams = zod.object({
+  "token": zod.coerce.string()
+})
+
+export const AcceptInvitationResponse = zod.void()
+
+
 export const ListGamesQueryParams = zod.object({
   "teamId": zod.coerce.number().int().optional(),
   "date": zod.coerce.string().optional()
@@ -163,6 +271,31 @@ export const ListGamesResponseItem = zod.object({
 export const ListGamesResponse = zod.array(ListGamesResponseItem)
 
 
+export const CreateGameBody = zod.object({
+  "homeTeamId": zod.int(),
+  "awayTeamId": zod.int(),
+  "venueId": zod.int(),
+  "courtId": zod.int(),
+  "scheduledAt": zod.coerce.date()
+})
+
+export const CreateGameResponse = zod.object({
+  "id": zod.int(),
+  "date": zod.string(),
+  "startTime": zod.string(),
+  "venue": zod.string(),
+  "court": zod.string(),
+  "homeTeam": zod.string(),
+  "awayTeam": zod.string(),
+  "homeTeamId": zod.int().optional(),
+  "awayTeamId": zod.int().optional(),
+  "status": zod.enum(['SCHEDULED', 'CANCELLED', 'FINAL', 'PENDING_CONFIRMATION', 'DISPUTED']),
+  "published": zod.boolean(),
+  "homeScore": zod.int().nullish(),
+  "awayScore": zod.int().nullish()
+})
+
+
 export const GetGameParams = zod.object({
   "gameId": zod.coerce.number().int()
 })
@@ -181,6 +314,150 @@ export const GetGameResponse = zod.object({
   "published": zod.boolean(),
   "homeScore": zod.int().nullish(),
   "awayScore": zod.int().nullish()
+})
+
+
+export const UpdateGameParams = zod.object({
+  "gameId": zod.coerce.number().int()
+})
+
+export const UpdateGameBody = zod.object({
+  "homeTeamId": zod.int(),
+  "awayTeamId": zod.int(),
+  "venueId": zod.int(),
+  "courtId": zod.int(),
+  "scheduledAt": zod.coerce.date()
+})
+
+export const UpdateGameResponse = zod.object({
+  "id": zod.int(),
+  "date": zod.string(),
+  "startTime": zod.string(),
+  "venue": zod.string(),
+  "court": zod.string(),
+  "homeTeam": zod.string(),
+  "awayTeam": zod.string(),
+  "homeTeamId": zod.int().optional(),
+  "awayTeamId": zod.int().optional(),
+  "status": zod.enum(['SCHEDULED', 'CANCELLED', 'FINAL', 'PENDING_CONFIRMATION', 'DISPUTED']),
+  "published": zod.boolean(),
+  "homeScore": zod.int().nullish(),
+  "awayScore": zod.int().nullish()
+})
+
+
+export const PublishGameParams = zod.object({
+  "gameId": zod.coerce.number().int()
+})
+
+export const PublishGameResponse = zod.void()
+
+
+export const CancelGameParams = zod.object({
+  "gameId": zod.coerce.number().int()
+})
+
+export const CancelGameResponse = zod.void()
+
+
+export const ListVenuesResponseItem = zod.object({
+  "id": zod.int(),
+  "leagueId": zod.int(),
+  "name": zod.string(),
+  "address": zod.string(),
+  "active": zod.boolean()
+})
+export const ListVenuesResponse = zod.array(ListVenuesResponseItem)
+
+
+
+
+
+export const CreateVenueBody = zod.object({
+  "name": zod.string().min(1),
+  "address": zod.string().optional()
+})
+
+export const CreateVenueResponse = zod.object({
+  "id": zod.int(),
+  "leagueId": zod.int(),
+  "name": zod.string(),
+  "address": zod.string(),
+  "active": zod.boolean()
+})
+
+
+export const UpdateVenueParams = zod.object({
+  "venueId": zod.coerce.number().int()
+})
+
+
+
+
+export const UpdateVenueBody = zod.object({
+  "name": zod.string().min(1).optional(),
+  "address": zod.string().optional(),
+  "active": zod.boolean().optional()
+})
+
+export const UpdateVenueResponse = zod.object({
+  "id": zod.int(),
+  "leagueId": zod.int(),
+  "name": zod.string(),
+  "address": zod.string(),
+  "active": zod.boolean()
+})
+
+
+export const ListCourtsParams = zod.object({
+  "venueId": zod.coerce.number().int()
+})
+
+export const ListCourtsResponseItem = zod.object({
+  "id": zod.int(),
+  "venueId": zod.int(),
+  "name": zod.string(),
+  "active": zod.boolean()
+})
+export const ListCourtsResponse = zod.array(ListCourtsResponseItem)
+
+
+export const CreateCourtParams = zod.object({
+  "venueId": zod.coerce.number().int()
+})
+
+
+
+
+export const CreateCourtBody = zod.object({
+  "name": zod.string().min(1)
+})
+
+export const CreateCourtResponse = zod.object({
+  "id": zod.int(),
+  "venueId": zod.int(),
+  "name": zod.string(),
+  "active": zod.boolean()
+})
+
+
+export const UpdateCourtParams = zod.object({
+  "courtId": zod.coerce.number().int()
+})
+
+
+
+
+export const UpdateCourtBody = zod.object({
+  "name": zod.string().min(1).optional(),
+  "active": zod.boolean().optional()
+})
+
+export const UpdateCourtResponse = zod.object({
+  "id": zod.int(),
+  "venueId": zod.int(),
+  "name": zod.string(),
+  "active": zod.boolean()
 })
 
 
@@ -218,6 +495,24 @@ export const SubmitScoreResponse = zod.object({
   "awayScore": zod.int(),
   "status": zod.enum(['NOT_SUBMITTED', 'PENDING_CONFIRMATION', 'DISPUTED', 'FINAL'])
 })
+
+
+export const CorrectScoreParams = zod.object({
+  "gameId": zod.coerce.number().int()
+})
+
+export const correctScoreBodyHomeScoreMin = 0;
+
+export const correctScoreBodyAwayScoreMin = 0;
+
+
+
+export const CorrectScoreBody = zod.object({
+  "homeScore": zod.int().min(correctScoreBodyHomeScoreMin),
+  "awayScore": zod.int().min(correctScoreBodyAwayScoreMin)
+})
+
+export const CorrectScoreResponse = zod.void()
 
 
 export const GetScoreReviewQueueResponseItem = zod.object({
@@ -259,5 +554,23 @@ export const DisputeScoreBody = zod.object({
 })
 
 export const DisputeScoreResponse = zod.void()
+
+
+export const ResolveScoreParams = zod.object({
+  "gameId": zod.coerce.number().int()
+})
+
+export const resolveScoreBodyHomeScoreMin = 0;
+
+export const resolveScoreBodyAwayScoreMin = 0;
+
+
+
+export const ResolveScoreBody = zod.object({
+  "homeScore": zod.int().min(resolveScoreBodyHomeScoreMin),
+  "awayScore": zod.int().min(resolveScoreBodyAwayScoreMin)
+})
+
+export const ResolveScoreResponse = zod.void()
 
 

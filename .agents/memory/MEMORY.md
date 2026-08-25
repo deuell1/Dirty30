@@ -1,0 +1,1 @@
+- [Dirty-30 preview API routing](dirty30-preview-api-routing.md) — the root Vite preview needs an explicit `/api` dev proxy to avoid serving HTML to typed API clients.

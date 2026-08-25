@@ -3,6 +3,7 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import { clerkMiddleware } from "@clerk/express";
 import router from "./routes";
+import healthRouter from "./routes/health";
 import { logger } from "./lib/logger";
 import { CLERK_PROXY_PATH, clerkProxyMiddleware } from "./middlewares/clerkProxyMiddleware";
 
@@ -29,6 +30,7 @@ app.use(
 );
 app.use(cors());
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
+app.use("/api", healthRouter);
 app.use(clerkMiddleware());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -37,7 +39,9 @@ app.use("/api", router);
 
 app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   logger.error({ error }, "Unhandled API error");
-  res.status(500).json({ error: "Unexpected server error" });
+  const status = typeof error === "object" && error !== null && "status" in error && typeof error.status === "number" ? error.status : 500;
+  const message = error instanceof Error && status < 500 ? error.message : "Unexpected server error";
+  res.status(status).json({ error: message });
 });
 
 export default app;

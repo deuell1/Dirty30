@@ -60,7 +60,7 @@ The unauthenticated web application presents Clerk sign-in. The API health endpo
 - **Captain:** manages invitations for their own team and submits, confirms, or disputes scores involving their team.
 - **Player:** has access to the league schedule, rosters, and standings.
 
-Rosters are constrained to 15 active members. Invitations are token-hashed, expire after seven days, and prevent duplicate pending invitations for the same team/email pair. Mutating API actions create audit records.
+Rosters are constrained to exactly 8 occupied positions: each active membership and each non-expired pending invitation consumes one position. Invitations are token-hashed, expire after seven days, and prevent duplicate pending invitations for the same team/email pair. Mutating API actions create audit records.
 
 ## Validation
 

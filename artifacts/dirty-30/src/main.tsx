@@ -10,7 +10,6 @@ const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 if (!publishableKey) {
   throw new Error('VITE_CLERK_PUBLISHABLE_KEY is required.');
 }
-
 createRoot(document.getElementById('root')!, {
   // Keeps caught errors off reportError(), which would raise the dev overlay.
   onCaughtError: (error, errorInfo) => {

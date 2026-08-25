@@ -34,6 +34,7 @@ import {
   PlayerStatus,
   getGetDashboardQueryKey,
   getGetGameQueryKey,
+  getGetCurrentUserQueryKey,
   getGetScoreReviewQueueQueryKey,
   getGetStandingsQueryKey,
   getGetTeamQueryKey,
@@ -44,6 +45,7 @@ import {
   useConfirmScore,
   useDisputeScore,
   useGetDashboard,
+  useGetCurrentUser,
   useGetGame,
   useGetScoreReviewQueue,
   useGetStandings,
@@ -54,6 +56,7 @@ import {
   useListTeams,
   useSubmitScore,
   useUpdateTeam,
+  useUpdateCurrentUser,
   setAuthTokenGetter,
   type Dashboard,
   type Game,
@@ -142,8 +145,11 @@ function LeagueLogo() {
 function Shell({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const health = useHealthCheck();
+  const currentUser = useGetCurrentUser().data;
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dark, setDark] = useState(false);
+  const displayName = currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : 'League member';
+  const displayInitials = initials(displayName);
   const active = (href: string) => href === '/' ? location === '/' : location.startsWith(href);
   const toggleDark = () => {
     setDark((current) => {
@@ -156,7 +162,7 @@ function Shell({ children }: { children: ReactNode }) {
       <div className="flex items-center justify-between"><LeagueLogo /><button data-testid="button-close-menu" onClick={() => setMobileOpen(false)} className="rounded-lg p-2 text-[hsl(var(--sidebar-foreground)/.65)] hover:bg-[hsl(var(--sidebar-accent))] lg:hidden"><X className="h-5 w-5" /></button></div>
        <div className="mt-12"><p className="mb-3 px-3 font-mono-custom text-[9px] font-bold uppercase tracking-[.18em] text-[hsl(var(--sidebar-foreground)/.42)]">League room</p><nav className="space-y-1">{navItems.map(({ href, label, icon: Icon }) => <Link key={href} href={href} data-testid={`link-nav-${label.toLowerCase()}`} onClick={() => setMobileOpen(false)} className={cx('flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold transition', active(href) ? 'bg-[hsl(var(--sidebar-primary))] text-[hsl(var(--sidebar-primary-foreground))]' : 'text-[hsl(var(--sidebar-foreground)/.67)] hover:bg-[hsl(var(--sidebar-accent))] hover:text-[hsl(var(--sidebar-foreground))]')}><Icon className="h-[18px] w-[18px]" />{label}{href === '/schedule' && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[hsl(var(--destructive))]" />}</Link>)}</nav></div>
       <div className="mt-auto space-y-1"><Link href="/review" data-testid="link-nav-review" className={cx('flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold transition', active('/review') ? 'bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-foreground))]' : 'text-[hsl(var(--sidebar-foreground)/.67)] hover:bg-[hsl(var(--sidebar-accent))]')}><ClipboardCheck className="h-[18px] w-[18px]" />Review queue<Badge tone="gold">2</Badge></Link><Link href="/settings" data-testid="link-nav-settings" className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-[hsl(var(--sidebar-foreground)/.67)] transition hover:bg-[hsl(var(--sidebar-accent))] hover:text-[hsl(var(--sidebar-foreground))]"><Settings className="h-[18px] w-[18px]" />Settings</Link></div>
-      <div className="mt-5 border-t border-[hsl(var(--sidebar-border))] pt-5"><div className="flex items-center gap-3"><div className="grid h-9 w-9 place-items-center rounded-full bg-[hsl(var(--sidebar-primary))] font-display text-sm font-bold text-[hsl(var(--sidebar-primary-foreground))]">JM</div><div className="min-w-0"><p className="truncate text-sm font-bold">Jordan Miles</p><p className="text-[10px] text-[hsl(var(--sidebar-foreground)/.48)]">Commissioner</p></div><button data-testid="button-toggle-theme" onClick={toggleDark} className="ml-auto rounded-lg p-2 text-[hsl(var(--sidebar-foreground)/.52)] hover:bg-[hsl(var(--sidebar-accent))]">{dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}</button></div></div>
+      <div className="mt-5 border-t border-[hsl(var(--sidebar-border))] pt-5"><div className="flex items-center gap-3"><div className="grid h-9 w-9 place-items-center rounded-full bg-[hsl(var(--sidebar-primary))] font-display text-sm font-bold text-[hsl(var(--sidebar-primary-foreground))]">{displayInitials}</div><div className="min-w-0"><p className="truncate text-sm font-bold">{displayName}</p><p className="text-[10px] text-[hsl(var(--sidebar-foreground)/.48)]">{roleLabel(currentUser?.role)}</p></div><button data-testid="button-toggle-theme" onClick={toggleDark} className="ml-auto rounded-lg p-2 text-[hsl(var(--sidebar-foreground)/.52)] hover:bg-[hsl(var(--sidebar-accent))]">{dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}</button></div></div>
     </aside>
     {mobileOpen && <button aria-label="Close navigation" data-testid="button-menu-overlay" onClick={() => setMobileOpen(false)} className="fixed inset-0 z-20 bg-[hsl(var(--sidebar)/.45)] lg:hidden" />}
     <div className="lg:pl-[252px]"><header className="sticky top-0 z-10 flex h-[72px] items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--background)/.91)] px-5 backdrop-blur-md sm:px-8"><button data-testid="button-open-menu" onClick={() => setMobileOpen(true)} className="rounded-xl p-2 text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))] lg:hidden"><Menu className="h-5 w-5" /></button><div className="hidden items-center gap-2 text-xs text-[hsl(var(--muted-foreground))] lg:flex"><span className={cx('h-2 w-2 rounded-full', health.data ? 'bg-[hsl(var(--primary))]' : 'bg-[hsl(var(--accent))]')} />{health.data ? 'League systems online' : 'League room'}</div><div className="ml-auto flex items-center gap-2 sm:gap-4"><Link href="/settings" data-testid="link-header-settings" className="rounded-xl p-2 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]"><Settings className="h-5 w-5" /></Link><div className="hidden h-5 w-px bg-[hsl(var(--border))] sm:block" /><span className="grid h-9 w-9 place-items-center rounded-full bg-[hsl(var(--primary))] font-display text-xs font-bold text-[hsl(var(--primary-foreground))]">JM</span></div></header><main className="mx-auto max-w-[1360px] px-5 py-7 pb-24 sm:px-8 sm:py-10 lg:px-12 lg:pb-12">{children}</main></div>
@@ -183,6 +189,7 @@ function Home() {
 
 function Teams() {
   const teams = useListTeams();
+  const currentUser = useGetCurrentUser();
   const create = useCreateTeam();
   const client = useQueryClient();
   const [adding, setAdding] = useState(false);
@@ -193,7 +200,8 @@ function Teams() {
     create.mutate({ data: { name: name.trim() } }, { onSuccess: () => { setName(''); setAdding(false); void client.invalidateQueries({ queryKey: getListTeamsQueryKey() }); } });
   };
   const list = teams.data as Team[] | undefined;
-  return <div className="animate-rise"><PageHeading eyebrow="The clubhouse" title="Teams" detail="Every squad, captain, and roster count in one quick scan." action={<Button onClick={() => setAdding((value) => !value)} testId="button-add-team"><Plus className="h-4 w-4" /> Add team</Button>} />{adding && <form onSubmit={handleSubmit} className="mb-6 flex flex-col gap-3 rounded-2xl border border-[hsl(var(--primary)/.25)] bg-[hsl(var(--primary)/.06)] p-4 sm:flex-row"><input autoFocus data-testid="input-team-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Team name" className="min-h-11 flex-1 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 text-sm outline-none focus:border-[hsl(var(--primary))]" /><Button type="submit" disabled={create.isPending} testId="button-save-team">{create.isPending ? 'Saving…' : 'Save team'}</Button><Button variant="ghost" onClick={() => setAdding(false)} testId="button-cancel-team">Cancel</Button></form>}<QueryState loading={teams.isLoading} error={teams.error} onRetry={() => void teams.refetch()} empty={!list?.length} emptyLabel="No teams have checked in yet."><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{list?.map((team, index) => <Link href={`/teams/${team.id}`} key={team.id} data-testid={`card-team-${team.id}`} className="group relative overflow-hidden rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 transition hover:-translate-y-1 hover:border-[hsl(var(--primary)/.5)] hover:shadow-[0_12px_28px_hsl(var(--foreground)/.08)]"><div className={cx('absolute right-0 top-0 h-24 w-24 rounded-bl-[56px]', index % 3 === 0 ? 'bg-[hsl(var(--accent)/.7)]' : index % 3 === 1 ? 'bg-[hsl(var(--primary)/.12)]' : 'bg-[hsl(var(--destructive)/.12)]')} /><div className="relative flex items-start justify-between"><div className="grid h-12 w-12 place-items-center rounded-2xl bg-[hsl(var(--sidebar))] font-display text-lg font-bold text-[hsl(var(--sidebar-foreground))]">{initials(team.name)}</div><Badge tone={team.active ? 'teal' : 'neutral'}>{team.active ? 'Active' : 'Inactive'}</Badge></div><h2 className="mt-7 font-display text-2xl font-bold tracking-[-.04em]">{team.name}</h2><div className="mt-4 flex items-center justify-between border-t border-[hsl(var(--border))] pt-4 text-xs text-[hsl(var(--muted-foreground))]"><span className="flex items-center gap-1.5"><UserRound className="h-3.5 w-3.5" />{team.playerCount} players</span><span className="font-semibold">{team.captainName || 'Captain TBA'} <ChevronRight className="ml-1 inline h-4 w-4 transition group-hover:translate-x-1" /></span></div></Link>)}</div></QueryState></div>;
+  const canManageTeams = currentUser.data?.role === DashboardRole.COMMISSIONER;
+  return <div className="animate-rise"><PageHeading eyebrow="The clubhouse" title="Teams" detail="Every squad, captain, and roster count in one quick scan." action={canManageTeams ? <Button onClick={() => setAdding((value) => !value)} testId="button-add-team"><Plus className="h-4 w-4" /> Add team</Button> : undefined} />{adding && <form onSubmit={handleSubmit} className="mb-6 flex flex-col gap-3 rounded-2xl border border-[hsl(var(--primary)/.25)] bg-[hsl(var(--primary)/.06)] p-4 sm:flex-row"><input autoFocus data-testid="input-team-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Team name" className="min-h-11 flex-1 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 text-sm outline-none focus:border-[hsl(var(--primary))]" /><Button type="submit" disabled={create.isPending} testId="button-save-team">{create.isPending ? 'Saving…' : 'Save team'}</Button><Button variant="ghost" onClick={() => setAdding(false)} testId="button-cancel-team">Cancel</Button></form>}<QueryState loading={teams.isLoading} error={teams.error} onRetry={() => void teams.refetch()} empty={!list?.length} emptyLabel="No teams have checked in yet."><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{list?.map((team, index) => <Link href={`/teams/${team.id}`} key={team.id} data-testid={`card-team-${team.id}`} className="group relative overflow-hidden rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 transition hover:-translate-y-1 hover:border-[hsl(var(--primary)/.5)] hover:shadow-[0_12px_28px_hsl(var(--foreground)/.08)]"><div className={cx('absolute right-0 top-0 h-24 w-24 rounded-bl-[56px]', index % 3 === 0 ? 'bg-[hsl(var(--accent)/.7)]' : index % 3 === 1 ? 'bg-[hsl(var(--primary)/.12)]' : 'bg-[hsl(var(--destructive)/.12)]')} /><div className="relative flex items-start justify-between"><div className="grid h-12 w-12 place-items-center rounded-2xl bg-[hsl(var(--sidebar))] font-display text-lg font-bold text-[hsl(var(--sidebar-foreground))]">{initials(team.name)}</div><Badge tone={team.active ? 'teal' : 'neutral'}>{team.active ? 'Active' : 'Inactive'}</Badge></div><h2 className="mt-7 font-display text-2xl font-bold tracking-[-.04em]">{team.name}</h2><div className="mt-4 flex items-center justify-between border-t border-[hsl(var(--border))] pt-4 text-xs text-[hsl(var(--muted-foreground))]"><span className="flex items-center gap-1.5"><UserRound className="h-3.5 w-3.5" />{team.playerCount} players</span><span className="font-semibold">{team.captainName || 'Captain TBA'} <ChevronRight className="ml-1 inline h-4 w-4 transition group-hover:translate-x-1" /></span></div></Link>)}</div></QueryState></div>;
 }
 
 function TeamDetail() {
@@ -218,7 +226,7 @@ function TeamDetail() {
 function Schedule() {
   const [filter, setFilter] = useState<'all' | 'upcoming' | 'final'>('all');
   const games = useListGames();
-  const list = games.data as Game[] | undefined;
+  const list = Array.isArray(games.data) ? games.data as Game[] : [];
   const filtered = useMemo(() => list?.filter((game) => filter === 'all' ? true : filter === 'final' ? game.status === GameStatus.FINAL : game.status !== GameStatus.FINAL) ?? [], [list, filter]);
   return <div className="animate-rise"><PageHeading eyebrow="The board" title="Schedule" detail="Published games, real locations, no digging through group chats." action={<div className="flex rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-1">{(['all', 'upcoming', 'final'] as const).map((item) => <button key={item} data-testid={`button-filter-${item}`} onClick={() => setFilter(item)} className={cx('rounded-lg px-3 py-2 text-xs font-bold capitalize transition', filter === item ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'text-[hsl(var(--muted-foreground))]')}>{item}</button>)}</div>} /><QueryState loading={games.isLoading} error={games.error} onRetry={() => void games.refetch()} empty={!filtered.length} emptyLabel={filter === 'all' ? 'The schedule is still being chalked up.' : `No ${filter} games yet.`}><div className="space-y-3">{filtered.map((game) => <GameRow key={game.id} game={game} />)}</div></QueryState></div>;
 }
@@ -275,11 +283,25 @@ function ReviewPersisted() {
 }
 
 function SettingsPage() {
-  const [saved, setSaved] = useState(false);
-  const [season, setSeason] = useState('Spring 2025');
-  const [league, setLeague] = useState('Dirty-30 Beer League');
-  const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); setSaved(true); window.setTimeout(() => setSaved(false), 2500); };
-  return <div className="animate-rise"><PageHeading eyebrow="Behind the scenes" title="Settings" detail="The small details that make game day feel official." /><form onSubmit={submit} className="max-w-2xl space-y-5"><section className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 sm:p-7"><div className="mb-6 flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-[hsl(var(--primary)/.1)] text-[hsl(var(--primary))]"><SlidersHorizontal className="h-5 w-5" /></div><div><h2 className="font-display text-xl font-bold">League identity</h2><p className="text-xs text-[hsl(var(--muted-foreground))]">What players see on their home screen.</p></div></div><div className="space-y-4"><label className="block text-sm font-bold">League name<input data-testid="input-league-name" value={league} onChange={(event) => setLeague(event.target.value)} className="mt-2 min-h-12 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 font-medium outline-none focus:border-[hsl(var(--primary))]" /></label><label className="block text-sm font-bold">Season name<input data-testid="input-season-name" value={season} onChange={(event) => setSeason(event.target.value)} className="mt-2 min-h-12 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 font-medium outline-none focus:border-[hsl(var(--primary))]" /></label></div></section><section className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 sm:p-7"><div className="mb-6 flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-[hsl(var(--accent)/.55)]"><Shield className="h-5 w-5" /></div><div><h2 className="font-display text-xl font-bold">Commissioner access</h2><p className="text-xs text-[hsl(var(--muted-foreground))]">Your account is the league's final word.</p></div></div><div className="flex items-center justify-between rounded-xl bg-[hsl(var(--muted)/.65)] p-4"><div><p className="text-sm font-bold">Jordan Miles</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">jordan@dirty30.local</p></div><Badge tone="teal">Commissioner</Badge></div></section><div className="flex items-center gap-3"><Button type="submit" testId="button-save-settings">{saved ? <><Check className="h-4 w-4" /> Saved</> : 'Save settings'}</Button>{saved && <span className="text-xs font-semibold text-[hsl(var(--primary))]" data-testid="status-settings-saved">Changes saved locally</span>}</div></form></div>;
+  const profile = useGetCurrentUser();
+  const update = useUpdateCurrentUser();
+  const client = useQueryClient();
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [phone, setPhone] = useState('');
+  useEffect(() => {
+    if (!profile.data) return;
+    setFirstName(profile.data.firstName);
+    setLastName(profile.data.lastName);
+    setPhone(profile.data.phone ?? '');
+  }, [profile.data]);
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    update.mutate({ data: { firstName: firstName.trim(), lastName: lastName.trim(), phone: phone.trim() || null } }, {
+      onSuccess: (updated) => client.setQueryData(getGetCurrentUserQueryKey(), updated),
+    });
+  };
+  return <div className="animate-rise"><PageHeading eyebrow="Your league account" title="Settings" detail="Keep your league contact details current." /><QueryState loading={profile.isLoading} error={profile.error || update.error} onRetry={() => void profile.refetch()}><form onSubmit={submit} className="max-w-2xl space-y-5"><section className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 sm:p-7"><div className="mb-6 flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-[hsl(var(--primary)/.1)] text-[hsl(var(--primary))]"><SlidersHorizontal className="h-5 w-5" /></div><div><h2 className="font-display text-xl font-bold">Profile details</h2><p className="text-xs text-[hsl(var(--muted-foreground))]">Used for rosters and league communication.</p></div></div><div className="grid gap-4 sm:grid-cols-2"><label className="block text-sm font-bold">First name<input required data-testid="input-profile-first-name" value={firstName} onChange={(event) => setFirstName(event.target.value)} className="mt-2 min-h-12 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 font-medium outline-none focus:border-[hsl(var(--primary))]" /></label><label className="block text-sm font-bold">Last name<input required data-testid="input-profile-last-name" value={lastName} onChange={(event) => setLastName(event.target.value)} className="mt-2 min-h-12 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 font-medium outline-none focus:border-[hsl(var(--primary))]" /></label><label className="block text-sm font-bold sm:col-span-2">Phone <span className="font-normal text-[hsl(var(--muted-foreground))]">(optional)</span><input data-testid="input-profile-phone" value={phone} onChange={(event) => setPhone(event.target.value)} className="mt-2 min-h-12 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 font-medium outline-none focus:border-[hsl(var(--primary))]" /></label></div></section><section className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 sm:p-7"><div className="flex items-center justify-between rounded-xl bg-[hsl(var(--muted)/.65)] p-4"><div><p className="text-sm font-bold">{profile.data ? `${profile.data.firstName} ${profile.data.lastName}` : 'League member'}</p><p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">{profile.data?.email}</p></div><Badge tone="teal">{roleLabel(profile.data?.role)}</Badge></div></section><div className="flex items-center gap-3"><Button type="submit" disabled={update.isPending || !firstName.trim() || !lastName.trim()} testId="button-save-profile">{update.isPending ? 'Saving…' : <><Check className="h-4 w-4" /> Save profile</>}</Button>{update.isSuccess && <span className="text-xs font-semibold text-[hsl(var(--primary))]" data-testid="status-profile-saved">Profile saved</span>}</div></form></QueryState></div>;
 }
 
 function Login() {

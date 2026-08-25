@@ -56,6 +56,52 @@ export interface Dashboard {
   recentResults: Game[];
 }
 
+export type UserProfileRole = typeof UserProfileRole[keyof typeof UserProfileRole];
+
+
+export const UserProfileRole = {
+  COMMISSIONER: 'COMMISSIONER',
+  CAPTAIN: 'CAPTAIN',
+  PLAYER: 'PLAYER',
+} as const;
+
+export interface UserProfile {
+  id: number;
+  email: string;
+  firstName: string;
+  lastName: string;
+  /** @nullable */
+  phone?: string | null;
+  role: UserProfileRole;
+}
+
+export interface ProfileInput {
+  /** @minLength 1 */
+  firstName: string;
+  /** @minLength 1 */
+  lastName: string;
+  /** @nullable */
+  phone?: string | null;
+}
+
+export interface CaptainInput {
+  userId: number;
+}
+
+export interface ActiveInput {
+  active: boolean;
+}
+
+export interface InvitationInput {
+  email: string;
+}
+
+export interface InvitationResult {
+  id: number;
+  expiresAt: string;
+  token: string;
+}
+
 export interface Team {
   id: number;
   name: string;
@@ -77,6 +123,53 @@ export interface TeamUpdate {
   /** @nullable */
   captainId?: number | null;
   active?: boolean;
+}
+
+export interface Venue {
+  id: number;
+  leagueId: number;
+  name: string;
+  address: string;
+  active: boolean;
+}
+
+export interface VenueInput {
+  /** @minLength 1 */
+  name: string;
+  address?: string;
+}
+
+export interface VenueUpdate {
+  /** @minLength 1 */
+  name?: string;
+  address?: string;
+  active?: boolean;
+}
+
+export interface Court {
+  id: number;
+  venueId: number;
+  name: string;
+  active: boolean;
+}
+
+export interface CourtInput {
+  /** @minLength 1 */
+  name: string;
+}
+
+export interface CourtUpdate {
+  /** @minLength 1 */
+  name?: string;
+  active?: boolean;
+}
+
+export interface GameInput {
+  homeTeamId: number;
+  awayTeamId: number;
+  venueId: number;
+  courtId: number;
+  scheduledAt: string;
 }
 
 export type PlayerStatus = typeof PlayerStatus[keyof typeof PlayerStatus];

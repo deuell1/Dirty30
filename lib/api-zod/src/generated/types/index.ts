@@ -6,15 +6,24 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './activeInput';
+export * from './captainInput';
+export * from './court';
+export * from './courtInput';
+export * from './courtUpdate';
 export * from './dashboard';
 export * from './dashboardRole';
 export * from './disputeInput';
 export * from './game';
+export * from './gameInput';
 export * from './gameStatus';
 export * from './healthStatus';
+export * from './invitationInput';
+export * from './invitationResult';
 export * from './listGamesParams';
 export * from './player';
 export * from './playerStatus';
+export * from './profileInput';
 export * from './score';
 export * from './scoreInput';
 export * from './scoreStatus';
@@ -22,3 +31,8 @@ export * from './standing';
 export * from './team';
 export * from './teamInput';
 export * from './teamUpdate';
+export * from './userProfile';
+export * from './userProfileRole';
+export * from './venue';
+export * from './venueInput';
+export * from './venueUpdate';
