@@ -603,6 +603,8 @@ components:
         awayTeam: { type: string }
         homeTeamId: { type: integer }
         awayTeamId: { type: integer }
+        venueId: { type: integer }
+        courtId: { type: integer }
         status: { type: string, enum: [SCHEDULED, CANCELLED, FINAL, PENDING_CONFIRMATION, DISPUTED] }
         published: { type: boolean }
         homeScore: { type: ["integer", "null"] }

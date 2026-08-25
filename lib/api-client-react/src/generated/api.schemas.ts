@@ -39,6 +39,8 @@ export interface Game {
   awayTeam: string;
   homeTeamId?: number;
   awayTeamId?: number;
+  venueId?: number;
+  courtId?: number;
   status: GameStatus;
   published: boolean;
   /** @nullable */

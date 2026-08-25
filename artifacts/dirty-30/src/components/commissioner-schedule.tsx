@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import {
   GameStatus,
   getListCourtsQueryKey,
@@ -22,6 +22,7 @@ import {
   useUpdateVenue,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { scheduleFormForEdit } from "./schedule-form";
 
 function message(error: unknown) {
   if (typeof error === "object" && error) {
@@ -104,16 +105,9 @@ export function CommissionerScheduleAdmin() {
   };
 
   const startEdit = (game: Game) => {
-    const venue = venueList.find((item) => item.name === game.venue);
-    setSelectedVenueId(venue?.id);
+    setSelectedVenueId(game.venueId);
     setEditingGame(game);
-    setForm({
-      homeTeamId: String(game.homeTeamId ?? ""),
-      awayTeamId: String(game.awayTeamId ?? ""),
-      venueId: String(venue?.id ?? ""),
-      courtId: "",
-      scheduledAt: `${game.date}T${toTwentyFourHour(game.startTime)}`,
-    });
+    setForm(scheduleFormForEdit(game, toTwentyFourHour));
   };
 
   const clearGame = () => {
