@@ -1,0 +1,293 @@
+Perform final security hardening, database-backed acceptance testing, and staging-release preparation for Dirty 30 in deuell1/Dirty30.
+
+Preserve the existing interface, phone-only Clerk authentication, PostgreSQL/Drizzle architecture, eight-position roster limit, generated OpenAPI clients and completed beta workflows.
+
+Do not add product features or redesign the application.
+
+1. Make the beta invitation-only
+
+Dirty 30 is a closed beta for one committed league. A person who verifies an arbitrary phone number must not automatically receive league access.
+
+Implement an explicit application access state:
+
+PENDING
+ACTIVE
+DISABLED
+
+Add it to the User model and create a reviewed migration.
+
+Rules:
+
+* The verified BOOTSTRAP_COMMISSIONER_PHONE user becomes ACTIVE commissioner.
+* A user whose verified phone matches a valid pending roster invitation may authenticate with PENDING access and accept that invitation.
+* Successful invitation acceptance changes access to ACTIVE atomically with membership creation.
+* An arbitrary verified phone with no invitation remains PENDING.
+* PENDING users can access only:
+    * /api/healthz
+    * /api/me
+    * Invitation acceptance for their own matching verified phone
+    * Sign-out
+* PENDING users cannot view teams, rosters, schedules, standings, scores, venues, courts or commissioner information.
+* DISABLED users cannot access league data or accept invitations.
+* Commissioner can disable or restore an account.
+* Removing a player from a roster does not automatically delete their account or audit history.
+* If the beta policy is that removed players lose all league access, commissioner must explicitly disable them.
+
+Add a mobile “Waiting for an invitation” screen for authenticated PENDING users. It should explain that access requires a captain or commissioner invitation and provide sign-out.
+
+Never expose whether a different phone number has a pending invitation.
+
+2. Correct the commissioner review queue
+
+The current review queue includes PENDING_CONFIRMATION and DISPUTED games but displays confirm/dispute actions for both.
+
+Implement status-aware behavior:
+
+PENDING_CONFIRMATION
+
+Show:
+
+* Submitted score
+* Submitting team or user
+* Confirm/finalize action for commissioner
+* Link to game detail
+
+DISPUTED
+
+Show:
+
+* Submitted score
+* Dispute reason
+* Disputing team or user
+* Editable resolution score
+* Resolve and finalize action
+* Link to game detail
+
+FINAL
+
+Do not show in the active review queue.
+
+Do not call confirm or dispute endpoints for a DISPUTED game.
+
+Use the same API-backed score component or shared mutation logic across review queue and game detail to prevent workflow divergence.
+
+Remove duplicate score-review logic where practical.
+
+3. Strengthen production authorization
+
+Audit every API endpoint and assign one of:
+
+* Public
+* Authenticated PENDING
+* Authenticated ACTIVE
+* Commissioner
+* Captain for owning team
+* Participating-team captain
+* Opposing-team captain
+
+Create a centralized authorization matrix in code and document it in the README.
+
+Verify that:
+
+* /api/healthz is the only anonymous league endpoint.
+* Phone numbers are not exposed through general roster views.
+* PENDING users cannot enumerate league records.
+* Players cannot access commissioner venue/court endpoints.
+* Captains cannot manage unrelated teams.
+* Draft games are commissioner-only.
+* Score actions follow game and team ownership.
+* Error messages do not reveal another person’s phone or invitation status.
+
+Restrict CORS in production to the configured Dirty 30 application origin. Do not leave unrestricted cors() in production.
+
+Add an environment value:
+
+APP_ORIGIN=
+
+Validate it at production startup.
+
+4. Replace shallow acceptance coverage
+
+Keep useful unit tests, but add PostgreSQL-backed integration tests against an isolated test database or isolated test schema.
+
+Never run integration tests against the production database.
+
+Test complete API and database workflows:
+
+Closed beta access
+
+* Arbitrary verified phone becomes PENDING.
+* PENDING user cannot list teams, schedule or standings.
+* Matching invited phone can accept.
+* Acceptance creates membership and ACTIVE access atomically.
+* Wrong phone cannot accept.
+* Disabled account cannot access or accept.
+* Bootstrap phone becomes ACTIVE commissioner.
+
+Concurrent roster capacity
+
+Issue concurrent invitation or acceptance requests against PostgreSQL and prove a ninth occupied roster position cannot be created.
+
+Verify the database ends with exactly eight occupied positions.
+
+Schedule
+
+Through actual HTTP handlers and PostgreSQL:
+
+* Create draft
+* Reject team conflict
+* Reject court conflict
+* Publish game
+* Restrict draft visibility
+* Cancel eligible game
+* Reject final-game cancellation
+
+Scores
+
+Using commissioner and opposing captain identities:
+
+* Submit
+* Confirm
+* Verify standings
+* Submit another score
+* Dispute with reason
+* Resolve
+* Correct final score
+* Verify before/after AuditEvent values
+* Verify non-final scores never affect standings
+
+Invitation lifecycle
+
+* Create
+* Regenerate
+* Confirm old token fails
+* Cancel
+* Confirm cancelled token fails
+* Expire
+* Confirm expired token fails
+* Accept valid token once
+* Confirm reuse fails
+
+Mock Clerk’s verified identity boundary, but exercise the real Express middleware, services, Drizzle queries, transactions and constraints below that boundary.
+
+5. Improve verification commands
+
+Change formatting verification so it checks all maintained first-party files, including:
+
+* TypeScript and TSX
+* JSON
+* YAML
+* Markdown
+* Relevant configuration files
+
+Do not check generated files if the generator produces incompatible formatting.
+
+Make pnpm verify run:
+
+1. OpenAPI generation consistency check
+2. Formatting check
+3. ESLint
+4. Strict type checking
+5. Unit tests
+6. PostgreSQL integration tests
+7. Production API build
+8. Production web build
+
+Ensure the command fails if regenerated OpenAPI files differ from committed files.
+
+Do not claim success based only on policy-helper tests.
+
+6. Add deployment readiness checks
+
+Keep /api/healthz as a simple liveness endpoint.
+
+Add /api/readyz that verifies:
+
+* Server is running
+* Database is reachable
+* Required production environment variables are present
+* Current migration version is available
+
+Return only generic status information. Do not expose secrets, database details, Clerk identifiers or phone numbers.
+
+Document a safe production migration command using Drizzle migrations. Do not use drizzle-kit push as the production migration procedure.
+
+Do not automatically seed production.
+
+Add a startup failure with a clear message when production is missing:
+
+* DATABASE_URL
+* CLERK_SECRET_KEY
+* VITE_CLERK_PUBLISHABLE_KEY where required by the build
+* BOOTSTRAP_COMMISSIONER_PHONE
+* APP_ORIGIN
+
+Never log their values.
+
+7. Clerk blocker and staging procedure
+
+Do not fall back to email.
+
+If the current Replit-managed Clerk tenant still cannot provide phone OTP:
+
+* Complete every code and mocked integration check possible.
+* Mark live phone authentication as BLOCKED.
+* Do not claim the application is ready for real users.
+* Provide exact steps for connecting a supported user-owned Clerk tenant.
+* Identify the plan required for production SMS.
+* Identify all Clerk settings and Replit Secrets that must be replaced.
+* Explain how to use Clerk test phone numbers and codes without sending real SMS.
+
+Once supported Clerk keys are available, the required staging smoke test is:
+
+1. Sign up with invited phone.
+2. Verify SMS OTP.
+3. Accept roster invitation.
+4. Sign in as commissioner.
+5. Create and publish a game.
+6. Sign in as participating captain.
+7. Submit score.
+8. Sign in as opposing captain.
+9. Confirm score.
+10. Verify standings.
+11. Dispute another score.
+12. Resolve as commissioner.
+13. Restart deployment.
+14. Confirm all data persists.
+
+8. Completion requirements
+
+Before reporting completion:
+
+* Generate and apply the new development migration.
+* Run the seed twice.
+* Run the full verification command.
+* Report unit and integration tests separately.
+* Start production configuration locally.
+* Verify /api/healthz.
+* Verify /api/readyz.
+* Verify PENDING access restrictions.
+* Verify review-queue behavior by status.
+* Confirm no secrets or real phone numbers are committed.
+* Update README with truthful executed results.
+* Do not report blocked checks as passed.
+
+Commit and push with:
+
+Harden closed beta access and release verification
+
+Report:
+
+* Migration result
+* Access-control behavior
+* Review-queue correction
+* Unit-test result
+* PostgreSQL integration-test result
+* Format, lint, type-check and build results
+* Health and readiness results
+* Clerk blocker status
+* Staging deployment status
+* Commit SHA
+* Remaining manual action
+
+Do not begin chat, waivers, payments, substitute pool, availability, automated scheduling or native packaging.
