@@ -62,8 +62,8 @@ function timeParts(value: Date) {
   const startTime = value.toLocaleTimeString("en-US", { timeZone: "America/Chicago", hour: "numeric", minute: "2-digit" });
   return { date, startTime };
 }
-async function activeSeason() {
-  const season = await db.query.seasons.findFirst({ where: eq(seasons.active, true) });
+async function activeSeason(database: typeof db = db) {
+  const season = await database.query.seasons.findFirst({ where: eq(seasons.active, true) });
   if (!season) throw new Error("No active season configured");
   return season;
 }
@@ -130,21 +130,30 @@ async function assertOpposingCaptainOrCommissioner(userId: number, game: typeof 
   const opposingCaptain = await db.query.teamMemberships.findFirst({ where: and(eq(teamMemberships.userId, userId), eq(teamMemberships.teamId, opposingTeamId), eq(teamMemberships.membershipRole, "CAPTAIN"), eq(teamMemberships.active, true)) });
   if (!opposingCaptain) throw Object.assign(new Error("Only the opposing team's captain can confirm or dispute this score"), { status: 403 });
 }
-async function validateGameInput(input: z.infer<typeof scheduleInput>, excludeGameId?: number) {
-  const [season, league] = await Promise.all([activeSeason(), db.query.leagues.findFirst({ where: eq(leagues.active, true) })]);
+type ScheduleTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function validateGameInput(tx: ScheduleTransaction, input: z.infer<typeof scheduleInput>, excludeGameId?: number) {
+  const [seasonRows, leagueRows] = await Promise.all([
+    tx.select().from(seasons).where(eq(seasons.active, true)).limit(1),
+    tx.select().from(leagues).where(eq(leagues.active, true)).limit(1),
+  ]);
+  const season = seasonRows[0];
+  const league = leagueRows[0];
+  if (!season) throw Object.assign(new Error("No active season configured"), { status: 409 });
   if (!league) throw Object.assign(new Error("No active league configured"), { status: 409 });
   const startsAt = new Date(input.scheduledAt);
   if (Number.isNaN(startsAt.getTime()) || startsAt.toISOString().slice(0, 10) < season.startDate || startsAt.toISOString().slice(0, 10) > season.endDate) throw Object.assign(new Error("Game time must be within the active season"), { status: 422 });
   if (input.homeTeamId === input.awayTeamId) throw Object.assign(new Error("A team cannot play itself"), { status: 422 });
-  const [home, away, venue, court] = await Promise.all([
-    db.query.teams.findFirst({ where: and(eq(teams.id, input.homeTeamId), eq(teams.seasonId, season.id), eq(teams.active, true)) }),
-    db.query.teams.findFirst({ where: and(eq(teams.id, input.awayTeamId), eq(teams.seasonId, season.id), eq(teams.active, true)) }),
-    db.query.venues.findFirst({ where: and(eq(venues.id, input.venueId), eq(venues.leagueId, league.id), eq(venues.active, true)) }),
-    db.query.courts.findFirst({ where: and(eq(courts.id, input.courtId), eq(courts.venueId, input.venueId), eq(courts.active, true)) }),
+  const [homeRows, awayRows, venueRows, courtRows] = await Promise.all([
+    tx.select().from(teams).where(and(eq(teams.id, input.homeTeamId), eq(teams.seasonId, season.id), eq(teams.active, true))).limit(1),
+    tx.select().from(teams).where(and(eq(teams.id, input.awayTeamId), eq(teams.seasonId, season.id), eq(teams.active, true))).limit(1),
+    tx.select().from(venues).where(and(eq(venues.id, input.venueId), eq(venues.leagueId, league.id), eq(venues.active, true))).limit(1),
+    tx.select().from(courts).where(and(eq(courts.id, input.courtId), eq(courts.venueId, input.venueId), eq(courts.active, true))).limit(1),
   ]);
+  const [home, away, venue, court] = [homeRows[0], awayRows[0], venueRows[0], courtRows[0]];
   if (!home || !away || !venue || !court) throw Object.assign(new Error("Teams, venue, and court must be active in the current league"), { status: 422 });
   const endsAt = new Date(startsAt.getTime() + 90 * 60_000);
-  const conflicting = await db.select({ id: games.id }).from(games).where(and(
+  const conflicting = await tx.select({ id: games.id }).from(games).where(and(
     eq(games.seasonId, season.id),
     ne(games.status, "CANCELLED"),
     lt(games.scheduledAt, endsAt),
@@ -155,10 +164,10 @@ async function validateGameInput(input: z.infer<typeof scheduleInput>, excludeGa
   if (conflicting.length) throw Object.assign(new Error("A team or court is already scheduled during this game window"), { status: 409 });
   return season;
 }
-async function withScheduleMutationLock<T>(operation: () => Promise<T>) {
+async function withScheduleMutationLock<T>(operation: (tx: ScheduleTransaction) => Promise<T>) {
   return db.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(30030)`);
-    return operation();
+    return operation(tx);
   });
 }
 
@@ -359,8 +368,8 @@ router.patch("/courts/:courtId", requireCommissioner, async (req, res, next) => 
 });
 router.get("/schedule", async (req, res, next) => { try { const filters = ListGamesQueryParams.parse(req.query); const user = currentUser(req, res); const all = await apiGames(filters.teamId, filters.date, user); res.json(ListGamesResponse.parse(user.role === "COMMISSIONER" ? all : all.filter((game) => game.published))); } catch (error) { next(error); } });
 router.get("/schedule/:gameId", async (req, res, next) => { try { const { gameId } = GetGameParams.parse(req.params); const user = currentUser(req, res); const game = (await apiGames(undefined, undefined, user)).find((item) => item.id === gameId); if (!game || (!game.published && user.role !== "COMMISSIONER")) return res.status(404).json({ error: "Game not found" }); return res.json(GetGameResponse.parse(game)); } catch (error) { return next(error); } });
-router.post("/schedule", requireCommissioner, async (req, res, next) => { try { const input = scheduleInput.parse(req.body); const game = await withScheduleMutationLock(async () => { const season = await validateGameInput(input); return (await db.insert(games).values({ ...input, seasonId: season.id, scheduledAt: new Date(input.scheduledAt), status: "DRAFT" }).returning())[0]!; }); await audit(currentUser(req, res).id, "game", game.id, "CREATED", undefined, game); const response = (await apiGames()).find((item) => item.id === game.id); return res.status(201).json(GetGameResponse.parse(response)); } catch (error) { return next(error); } });
-router.patch("/schedule/:gameId", requireCommissioner, async (req, res, next) => { try { const gameId = z.coerce.number().int().positive().parse(req.params.gameId); const input = scheduleInput.parse(req.body); const result = await withScheduleMutationLock(async () => { const before = await db.query.games.findFirst({ where: eq(games.id, gameId) }); if (!before || (before.status !== "DRAFT" && before.status !== "PUBLISHED")) throw Object.assign(new Error("Only draft or published games can be edited"), { status: 409 }); await validateGameInput(input, gameId); const [game] = await db.update(games).set({ ...input, scheduledAt: new Date(input.scheduledAt) }).where(eq(games.id, gameId)).returning(); return { before, game: game! }; }); await audit(currentUser(req, res).id, "game", gameId, "UPDATED", result.before, result.game); const response = (await apiGames()).find((item) => item.id === result.game.id); return res.json(GetGameResponse.parse(response)); } catch (error) { return next(error); } });
+ router.post("/schedule", requireCommissioner, async (req, res, next) => { try { const input = scheduleInput.parse(req.body); const game = await withScheduleMutationLock(async (tx) => { const season = await validateGameInput(tx, input); return (await tx.insert(games).values({ ...input, seasonId: season.id, scheduledAt: new Date(input.scheduledAt), status: "DRAFT" }).returning())[0]!; }); await audit(currentUser(req, res).id, "game", game.id, "CREATED", undefined, game); const response = (await apiGames()).find((item) => item.id === game.id); return res.status(201).json(GetGameResponse.parse(response)); } catch (error) { return next(error); } });
+ router.patch("/schedule/:gameId", requireCommissioner, async (req, res, next) => { try { const gameId = z.coerce.number().int().positive().parse(req.params.gameId); const input = scheduleInput.parse(req.body); const result = await withScheduleMutationLock(async (tx) => { const before = (await tx.select().from(games).where(eq(games.id, gameId)).limit(1))[0]; if (!before || (before.status !== "DRAFT" && before.status !== "PUBLISHED")) throw Object.assign(new Error("Only draft or published games can be edited"), { status: 409 }); await validateGameInput(tx, input, gameId); const [game] = await tx.update(games).set({ ...input, scheduledAt: new Date(input.scheduledAt) }).where(eq(games.id, gameId)).returning(); return { before, game: game! }; }); await audit(currentUser(req, res).id, "game", gameId, "UPDATED", result.before, result.game); const response = (await apiGames()).find((item) => item.id === result.game.id); return res.json(GetGameResponse.parse(response)); } catch (error) { return next(error); } });
 router.post("/schedule/:gameId/publish", requireCommissioner, async (req, res, next) => { try { const gameId = z.coerce.number().int().positive().parse(req.params.gameId); const [game] = await db.update(games).set({ status: "PUBLISHED" }).where(and(eq(games.id, gameId), eq(games.status, "DRAFT"))).returning(); if (!game) return res.status(409).json({ error: "Only draft games can be published" }); await audit(currentUser(req, res).id, "game", gameId, "PUBLISHED"); return res.status(204).end(); } catch (error) { return next(error); } });
 router.post("/schedule/:gameId/cancel", requireCommissioner, async (req, res, next) => { try { const gameId = z.coerce.number().int().positive().parse(req.params.gameId); const [game] = await db.update(games).set({ status: "CANCELLED" }).where(and(eq(games.id, gameId), ne(games.status, "FINAL"))).returning(); if (!game) return res.status(409).json({ error: "Final or missing games cannot be cancelled" }); await audit(currentUser(req, res).id, "game", gameId, "CANCELLED"); return res.status(204).end(); } catch (error) { return next(error); } });
 router.get("/standings", async (_req, res, next) => { try { const rows = (await teamList()).filter((team) => team.active).map((team) => ({ teamName: team.name, played: 0, wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, differential: 0 })); const map = new Map(rows.map((row) => [row.teamName, row])); for (const game of await apiGames()) { if (game.status !== "FINAL" || game.homeScore === null || game.awayScore === null) continue; const home = map.get(game.homeTeam); const away = map.get(game.awayTeam); if (!home || !away) continue; home.played++; away.played++; home.pointsFor += game.homeScore; home.pointsAgainst += game.awayScore; away.pointsFor += game.awayScore; away.pointsAgainst += game.homeScore; if (game.homeScore > game.awayScore) { home.wins++; away.losses++; } else if (game.awayScore > game.homeScore) { away.wins++; home.losses++; } } res.json(GetStandingsResponse.parse(rows.map((row) => ({ ...row, differential: row.pointsFor - row.pointsAgainst })).sort((a,b) => b.wins-a.wins || b.differential-a.differential || b.pointsFor-a.pointsFor).map((row,index) => ({ rank:index+1,...row })))); } catch (error) { next(error); } });

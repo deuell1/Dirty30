@@ -5,12 +5,13 @@
   "scripts": {
     "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
     "build": "pnpm run typecheck && pnpm --filter @workspace/api-server run build && pnpm --filter @workspace/dirty-30 run build",
-    "format:check": "prettier --check package.json",
+    "format:check": "prettier --check --ignore-unknown --ignore-path .prettierignore .",
     "lint": "eslint artifacts/api-server/src artifacts/dirty-30/src lib/db/src --quiet",
     "test": "pnpm -r --if-present run test",
+    "test:integration": "node lib/db/scripts/postgres-integration.mjs",
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
-    "verify": "pnpm --filter @workspace/api-spec run codegen && git diff --exit-code -- lib/api-client-react/src/generated lib/api-zod/src/generated && pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run build"
+    "verify": "pnpm --filter @workspace/api-spec run codegen && git diff --exit-code -- lib/api-client-react/src/generated lib/api-zod/src/generated && pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run test:integration && pnpm run build"
   },
   "private": true,
   "dependencies": {

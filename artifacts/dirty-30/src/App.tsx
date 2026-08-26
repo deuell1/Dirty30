@@ -9,6 +9,7 @@ import {
 import { ErrorBoundary } from "@/components/error-boundary";
 import { PhoneAuthScreen } from "@/components/phone-auth";
 import { ScoreActions } from "@/components/score-actions";
+import { pendingSurface } from "@/components/invitation-flow";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { DashboardPage, GameDetailPage, InvitationPage, ProfilePage, SchedulePage, TeamDetailPage } from "@/components/beta-pages";
@@ -80,8 +81,11 @@ export function AuthBoundary() {
   useEffect(() => { if (!isSignedIn) return; const invite = window.sessionStorage.getItem("dirty30-invitation-return"); if (invite && invite !== location) { window.sessionStorage.removeItem("dirty30-invitation-return"); setLocation(invite); } }, [isSignedIn, location, setLocation]);
   if (!isLoaded) return <div className="grid min-h-[100dvh] place-items-center">Opening the league room…</div>;
   if (!isSignedIn) { if (location.startsWith("/invite/")) window.sessionStorage.setItem("dirty30-invitation-return", location); return <PhoneAuthScreen />; }
-  if (profile.data?.accessState === "PENDING") return <PendingAccessScreen />;
-  if (profile.error) return <AccessUnavailableScreen />;
+  if (profile.isLoading || profile.isFetching) return <div className="grid min-h-[100dvh] place-items-center">Checking your league access…</div>;
+  if (profile.error) return <AccessUnavailableScreen onRetry={() => void profile.refetch()} retrying={profile.isFetching} />;
+  const surface = profile.data ? pendingSurface(location, profile.data.accessState) : "active";
+  if (surface === "waiting") return <PendingAccessScreen />;
+  if (surface === "invitation") return <InvitationPage />;
   return <Router />;
 }
 
@@ -90,9 +94,9 @@ function PendingAccessScreen() {
   return <main className="grid min-h-[100dvh] place-items-center bg-[hsl(var(--background))] p-5"><section className="max-w-md rounded-3xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-7 text-center shadow-sm"><p className="text-xs font-bold uppercase tracking-[.16em] text-[hsl(var(--primary))]">Dirty-30 closed beta</p><h1 className="mt-3 font-display text-3xl font-extrabold">Waiting for an invitation</h1><p className="mt-4 text-sm leading-6 text-[hsl(var(--muted-foreground))]">This league is invitation-only. Ask your captain or commissioner to invite the verified phone number you used to sign in.</p><button onClick={() => void signOut()} className="mt-6 min-h-11 rounded-xl bg-[hsl(var(--primary))] px-4 text-sm font-bold text-[hsl(var(--primary-foreground))]">Sign out</button></section></main>;
 }
 
-function AccessUnavailableScreen() {
+function AccessUnavailableScreen({ onRetry, retrying }: { onRetry: () => void; retrying: boolean }) {
   const { signOut } = useClerk();
-  return <main className="grid min-h-[100dvh] place-items-center bg-[hsl(var(--background))] p-5"><section className="max-w-md rounded-3xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-7 text-center"><h1 className="font-display text-3xl font-extrabold">League access unavailable</h1><p className="mt-4 text-sm text-[hsl(var(--muted-foreground))]">This account cannot access league information. Contact a commissioner if you need help.</p><button onClick={() => void signOut()} className="mt-6 min-h-11 rounded-xl bg-[hsl(var(--primary))] px-4 text-sm font-bold text-[hsl(var(--primary-foreground))]">Sign out</button></section></main>;
+  return <main className="grid min-h-[100dvh] place-items-center bg-[hsl(var(--background))] p-5"><section className="max-w-md rounded-3xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-7 text-center"><h1 className="font-display text-3xl font-extrabold">Couldn’t load league access</h1><p className="mt-4 text-sm text-[hsl(var(--muted-foreground))]">Your verified account was found, but we couldn’t refresh its league access right now.</p><div className="mt-6 flex justify-center gap-2"><button onClick={onRetry} disabled={retrying} className="min-h-11 rounded-xl bg-[hsl(var(--primary))] px-4 text-sm font-bold text-[hsl(var(--primary-foreground))]">{retrying ? "Retrying…" : "Retry"}</button><button onClick={() => void signOut()} className="min-h-11 rounded-xl border px-4 text-sm font-bold">Sign out</button></div></section></main>;
 }
 
 function Router() {

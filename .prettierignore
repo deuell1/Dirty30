@@ -1,0 +1,13 @@
+node_modules
+dist
+coverage
+.git
+.cache
+.local
+.agents
+attached_assets
+artifacts/mockup-sandbox
+lib/api-client-react/src/generated
+lib/api-zod/src/generated
+lib/db/drizzle
+lib/db/drizzle/meta

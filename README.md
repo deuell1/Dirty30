@@ -18,13 +18,30 @@ The executable route map is maintained in `artifacts/api-server/src/services/aut
 
 ### Production migration and readiness
 
-Apply committed migrations in production with:
+Apply committed migrations to the dedicated staging/test database with:
 
 ```sh
-pnpm --filter @workspace/db run migrate
+DATABASE_URL="$TEST_DATABASE_URL" pnpm --filter @workspace/db run migrate
 ```
 
-Do not use `drizzle-kit push` for production and do not seed production automatically. Production startup requires `DATABASE_URL`, `CLERK_SECRET_KEY`, `VITE_CLERK_PUBLISHABLE_KEY`, `BOOTSTRAP_COMMISSIONER_PHONE`, and `APP_ORIGIN`; values are never logged. `APP_ORIGIN` is the only allowed browser origin for production CORS. `/api/healthz` is liveness-only; `/api/readyz` reports generic readiness after a database probe and production-variable check.
+Do not use `drizzle-kit push` for staging or production and do not seed production automatically. Production startup requires `DATABASE_URL`, `CLERK_SECRET_KEY`, `VITE_CLERK_PUBLISHABLE_KEY`, `BOOTSTRAP_COMMISSIONER_PHONE`, and `APP_ORIGIN`; values are never logged. `APP_ORIGIN` is the only allowed browser origin for production CORS. `/api/healthz` is liveness-only; `/api/readyz` reports generic readiness after a database probe and production-variable check.
+
+### Staging checklist
+
+```sh
+# Requires a dedicated database that is not DATABASE_URL.
+TEST_DATABASE_URL="postgresql://…" pnpm run test:integration
+pnpm --filter @workspace/api-spec run codegen
+pnpm run lint && pnpm run typecheck && pnpm test && pnpm run build
+
+# Start the API with NODE_ENV=production only after the production secrets exist.
+NODE_ENV=production pnpm --filter @workspace/api-server run build
+NODE_ENV=production PORT=8080 pnpm --filter @workspace/api-server run start
+curl -fsS http://127.0.0.1:8080/api/healthz
+curl -fsS http://127.0.0.1:8080/api/readyz
+```
+
+The integration runner refuses to run if `TEST_DATABASE_URL` is missing or equals `DATABASE_URL`. CI provisions its own PostgreSQL service. Run the database migration before build/start, never run the development seed in production, and use a supported Clerk test-phone OTP journey before declaring phone authentication verified.
 
 Live phone OTP smoke testing remains **BLOCKED** until a user-owned Clerk tenant with SMS phone OTP is connected. Configure Phone number as the sole sign-in identifier, enable SMS verification, disable email/password and social options, add supported Clerk publishable/secret keys and the bootstrap phone as Replit Secrets, and use Clerk test phone numbers/codes for staging before enabling paid production SMS.
 # Dirty-30
@@ -69,10 +86,10 @@ Generate a reviewed migration after changing the Drizzle schema:
 pnpm --filter @workspace/db run generate
 ```
 
-Apply the schema to the configured development database:
+Apply committed migrations to the configured development database:
 
 ```bash
-pnpm --filter @workspace/db run push
+pnpm --filter @workspace/db run migrate
 ```
 
 Load the idempotent Summer 2026 development fixture:
@@ -128,15 +145,16 @@ Use the managed artifact deployment. It supplies service routing and environment
 
 ### Passed
 
-- `pnpm verify` completed successfully: formatter gate, ESLint, workspace typechecking, Vitest, API production build, and web production build.
-- Automated tests passed: 27 API tests cover phone normalization, roster occupancy, role-aware workflow policy, score lifecycle/audit rules, schedule conflict and visibility rules, standings calculations, mocked Clerk identity gates, real Express authorization boundaries, the public health endpoint, and unauthenticated API rejection; 6 web tests cover US-phone normalization, resend cooldown behavior, preserving a game's existing court during schedule editing, and commissioner venue/court update payloads without sending SMS.
-- Development API and web workflows restarted cleanly after the final build. The API is listening and `/api/healthz` is publicly available.
-- Mobile browser verification passed at a 390px viewport: the signed-out app displays only US phone/SMS access, has no email/password/username/social controls, gives a local invalid-phone error, does not clip primary controls, and has no runtime console errors.
+- Workspace typechecking, 32 API unit tests, 8 web unit tests, and both API/web production builds completed successfully.
+- Development API and web workflows restarted cleanly. `/api/healthz` returns `{"status":"ok"}` and `/api/readyz` returns `{"status":"ready"}`.
+- Mobile browser verification passed at a 390px viewport: the signed-out app displays only US phone/SMS access, has no email/password/username/social controls, gives a local invalid-phone error, does not clip primary controls, and has no browser errors beyond Clerk’s expected development-key warning.
 - The web UI uses server-derived roles and permissions for commissioner, captain, and player affordances; roster capacity uses active memberships plus pending unexpired invitations; invitation tokens survive the signed-out sign-in boundary.
 - Commissioner screens support venues, courts, draft games, publishing, cancellation, and score review/correction flows through generated API hooks. Score mutations refresh game, schedule, dashboard, review, and standings queries.
 
 ### Blocked before release
 
+- `pnpm verify` is not yet green. The expanded formatter gate detects 109 existing source/configuration files outside generated/build/vendor directories that do not match Prettier. Those files need a deliberate repository-wide formatting pass, not a hidden exclusion.
+- PostgreSQL integration checks are configured to require `TEST_DATABASE_URL` and refuse to run when it equals `DATABASE_URL`. The current secret aliases the application database, so migration/default and concurrent schedule-lock checks have not been executed against a separate disposable database.
 - Live Clerk phone/SMS OTP sign-in, invitation acceptance, and authenticated commissioner/captain/player browser journeys cannot be accepted in this Replit-managed Clerk tenant because phone/SMS authentication is unavailable. This is a tenant capability/configuration prerequisite, not an email fallback case.
 - Before publishing, use a supported Clerk tenant with US SMS OTP enabled, configure the bootstrap commissioner phone, apply the production database migration, and then repeat the role-path, invitation, score-confirmation, dispute, resolution, and final-score correction browser checks.
 

@@ -32,6 +32,7 @@ import {
   useUpdateCurrentUser,
   useUpdateTeam,
 } from "@workspace/api-client-react";
+import { refreshAfterInvitationAcceptance } from "./invitation-flow";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
 import { Link, useLocation, useParams } from "wouter";
 import { CommissionerScheduleAdmin } from "./commissioner-schedule";
@@ -142,7 +143,27 @@ export function InvitationPage() {
   const accept = useAcceptInvitation();
   const client = useQueryClient();
   const [, navigate] = useLocation();
-  return <div className="mx-auto max-w-xl py-12"><section className={`${card} text-center`}><p className="text-xs font-bold uppercase tracking-[.16em] text-[hsl(var(--primary))]">Team invitation</p><h1 className="mt-3 font-display text-3xl font-extrabold">Ready to take a roster spot?</h1><p className="mt-3 text-sm text-[hsl(var(--muted-foreground))]">Your signed-in verified phone must match the captain’s invitation.</p>{accept.error && <p className="mt-4 rounded-xl bg-[hsl(var(--destructive)/.1)] p-3 text-sm font-semibold text-[hsl(var(--destructive))]">{errorText(accept.error)}</p>}<button className={`${action} mt-5`} disabled={accept.isPending} onClick={() => token && accept.mutate({ token }, { onSuccess: (result) => { void Promise.all([client.invalidateQueries({ queryKey: getListTeamsQueryKey() }), client.invalidateQueries({ queryKey: getGetTeamQueryKey(result.teamId) }), client.invalidateQueries({ queryKey: getGetTeamRosterQueryKey(result.teamId) })]); navigate(`/teams/${result.teamId}`); } })}>{accept.isPending ? "Joining team…" : "Accept invitation"}</button></section></div>;
+  const profile = useGetCurrentUser();
+  const [refreshError, setRefreshError] = useState("");
+  const [acceptedTeamId, setAcceptedTeamId] = useState<number | null>(null);
+  const complete = async (teamId: number) => {
+    setRefreshError("");
+    const refreshed = await refreshAfterInvitationAcceptance(client, {
+      currentUser: getGetCurrentUserQueryKey(),
+      teams: getListTeamsQueryKey(),
+      team: getGetTeamQueryKey(teamId),
+      roster: getGetTeamRosterQueryKey(teamId),
+    });
+    if (refreshed?.accessState !== "ACTIVE") {
+      setAcceptedTeamId(teamId);
+      setRefreshError("Your invitation was accepted, but your access is still refreshing. Try again in a moment.");
+      await profile.refetch();
+      return;
+    }
+    setAcceptedTeamId(null);
+    navigate(`/teams/${teamId}`);
+  };
+  return <div className="mx-auto max-w-xl py-12"><section className={`${card} text-center`}><p className="text-xs font-bold uppercase tracking-[.16em] text-[hsl(var(--primary))]">Team invitation</p><h1 className="mt-3 font-display text-3xl font-extrabold">Ready to take a roster spot?</h1><p className="mt-3 text-sm text-[hsl(var(--muted-foreground))]">Your signed-in verified phone must match the captain’s invitation.</p>{accept.error && <p className="mt-4 rounded-xl bg-[hsl(var(--destructive)/.1)] p-3 text-sm font-semibold text-[hsl(var(--destructive))]">{errorText(accept.error)}</p>}{refreshError && <p className="mt-4 rounded-xl bg-[hsl(var(--destructive)/.1)] p-3 text-sm font-semibold text-[hsl(var(--destructive))]">{refreshError}</p>}{acceptedTeamId ? <button className={`${action} mt-5`} onClick={() => void complete(acceptedTeamId).catch(() => setRefreshError("We still couldn’t refresh your league access. Please retry."))}>Retry access refresh</button> : <button className={`${action} mt-5`} disabled={accept.isPending} onClick={() => token && accept.mutate({ token }, { onSuccess: (result) => { void complete(result.teamId).catch(() => { setAcceptedTeamId(result.teamId); setRefreshError("The invitation was accepted, but we couldn’t refresh your league access. Retry before continuing."); }); } })}>{accept.isPending ? "Joining team…" : "Accept invitation"}</button>}</section></div>;
 }
 
 function GameSummary({ game }: { game: Game }) {

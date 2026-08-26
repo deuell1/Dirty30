@@ -1,15 +1,18 @@
-# [Project name]
+# Dirty-30
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Mobile-first closed-beta administration for an adult recreational beer league.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- `pnpm --filter @workspace/api-server run dev` — run the API server through its managed workflow
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- `pnpm --filter @workspace/db run generate` — generate a reviewed migration after schema edits
+- `pnpm --filter @workspace/db run migrate` — apply committed migrations to development
+- `TEST_DATABASE_URL=… pnpm run test:integration` — run PostgreSQL checks against a dedicated test database only
+- `pnpm verify` — generated-client drift, formatting, lint, types, unit tests, PostgreSQL integration, and production builds
+- Production required env: `DATABASE_URL`, `CLERK_SECRET_KEY`, `VITE_CLERK_PUBLISHABLE_KEY`, `BOOTSTRAP_COMMISSIONER_PHONE`, `APP_ORIGIN`
 
 ## Stack
 
@@ -22,23 +25,29 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `lib/db/src/schema/` — Drizzle schema and committed migration source
+- `lib/api-spec/openapi.yaml` — API contract; regenerated clients belong in `lib/api-client-react` and `lib/api-zod`
+- `artifacts/api-server/src/routes/league.ts` — league workflow routes and transaction-protected schedule mutations
+- `artifacts/dirty-30/src/` — mobile web app and guarded invitation flow
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Verified phone identities start pending; only a matching accepted invitation promotes access to active.
+- Schedule validation and writes share one transaction connection beneath a PostgreSQL advisory lock.
+- `TEST_DATABASE_URL` is mandatory for destructive integration checks; never point them at development or production.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+Teams, eight-position rosters, captain invitations, schedules, score reporting/review, and standings.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+Do not expand beyond the closed-beta roster, schedule, score-reporting, and standings scope.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Do not use `drizzle-kit push` or automatic seed data in staging/production.
+- The active Replit-managed Clerk tenant does not support SMS OTP; never claim a real OTP journey passed until a supported tenant completes it.
 
 ## Pointers
 

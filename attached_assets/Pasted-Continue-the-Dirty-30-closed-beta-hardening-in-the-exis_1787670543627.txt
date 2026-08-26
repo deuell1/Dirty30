@@ -1,0 +1,73 @@
+Continue the Dirty-30 closed-beta hardening in the existing repository. Do not redesign the app, replace its stack, add email/password authentication, add jersey numbers, add temporary players, or expand beyond the roster, schedule, score-reporting, and standings beta.
+
+First inspect the current implementation and preserve all working functionality. Then complete these release blockers:
+
+1. Fix the pending invitation flow.
+
+* A signed-in user with accessState === "PENDING" must be able to render only /invite/:token, in addition to the pending-access screen.
+* Other league routes must remain unavailable to pending users.
+* Wait for the current-user query to finish before rendering the active router or deciding access state.
+* After successful invitation acceptance, invalidate and refetch the current-user query.
+* Do not navigate to the team page until /api/me returns ACTIVE.
+* Show a useful retryable error if the profile refresh fails.
+* Add frontend tests proving that a pending invitee can accept an invitation and subsequently enter the active app.
+* Add a regression test proving that an arbitrary pending user cannot view teams, schedules, standings, or the dashboard.
+
+2. Fix schedule concurrency.
+
+withScheduleMutationLock currently acquires a PostgreSQL advisory lock inside a transaction while the callback performs validation and writes through the global db object. Refactor it so the transaction object is passed through and every schedule-conflict read and schedule create/edit write uses that same transaction and connection. Add a PostgreSQL-backed concurrency test proving two conflicting schedule writes cannot both succeed.
+
+3. Add real PostgreSQL integration coverage.
+
+Use a dedicated TEST_DATABASE_URL; never run destructive tests against DATABASE_URL or production. Fail clearly when the integration-test command lacks a safe test database.
+
+Test these workflows against migrated PostgreSQL:
+
+* Uninvited verified phone is created as PENDING.
+* Pending accounts cannot enumerate league data.
+* Matching invitation acceptance atomically creates membership and activates the user.
+* Wrong-phone, expired, cancelled, reused, and concurrent invitation acceptance are rejected.
+* Active memberships plus unexpired pending invitations cannot exceed eight roster positions under concurrent requests.
+* Captain permissions are restricted to their own team.
+* Opposing captain can confirm or dispute a submitted score.
+* Commissioner can resolve a dispute and correct a final score.
+* Standings update only from final games.
+* Schedule conflict protection works under concurrency.
+* /readyz returns 503 when the database is unavailable.
+
+Keep fast unit tests, but label the database suite clearly and add it to pnpm verify.
+
+4. Finish repository verification.
+
+* Change format:check so Prettier checks all supported source, configuration, Markdown, YAML, JSON, and SQL files while excluding generated/build/vendor directories.
+* Add GitHub Actions CI for a clean pnpm install, generated-client drift check, formatting, linting, typechecking, unit tests, PostgreSQL integration tests, and production builds.
+* Use a PostgreSQL service container in CI.
+* Do not commit secrets or real phone numbers.
+* Keep generated API clients synchronized with the OpenAPI contract.
+
+5. Prepare Replit staging.
+
+Confirm production startup validates:
+
+* DATABASE_URL
+* CLERK_SECRET_KEY
+* VITE_CLERK_PUBLISHABLE_KEY
+* BOOTSTRAP_COMMISSIONER_PHONE
+* APP_ORIGIN
+
+Document the exact migration, build, start, liveness, and readiness commands. Do not use drizzle-kit push or automatic seed data in production. Do not claim SMS OTP is verified unless a supported Clerk tenant has completed an actual test-phone OTP journey.
+
+Run the complete verification suite. Fix all failures rather than weakening tests or disabling checks.
+
+At completion, report:
+
+* Files changed
+* Root causes fixed
+* Commands executed and exact results
+* Unit and PostgreSQL integration test counts
+* Migration applied
+* Remaining blockers
+* A mobile closed-beta smoke-test checklist
+* The final commit SHA
+
+Do not declare the beta release-ready unless the pending invitation regression test, PostgreSQL integration suite, production builds, /healthz, /readyz, and supported Clerk test-phone OTP flow all pass.
