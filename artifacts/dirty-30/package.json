@@ -5,10 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite --config vite.config.ts --host 0.0.0.0",
-    "build": "PORT=4173 BASE_PATH=/dirty-30 vite build --config vite.config.ts",
+    "build": "PORT=4173 BASE_PATH=\"${BASE_PATH:-/}\" vite build --config vite.config.ts",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "PORT=4173 BASE_PATH=/dirty-30 vitest run"
+    "test": "PORT=4173 BASE_PATH=\"${BASE_PATH:-/}\" vitest run"
   },
   "devDependencies": {
     "@hookform/resolvers": "^3.10.0",
