@@ -64,6 +64,36 @@ export interface Dashboard {
   recentResults: Game[];
 }
 
+export interface LeagueInitializationStatus {
+  requiresInitialization: boolean;
+  hasActiveLeague: boolean;
+  hasActiveSeason: boolean;
+  /** @nullable */
+  leagueName?: string | null;
+}
+
+export interface LeagueInitializationInput {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  leagueName: string;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  seasonName: string;
+  startDate: string;
+  endDate: string;
+}
+
+export interface LeagueInitializationResult {
+  leagueId: number;
+  seasonId: number;
+  leagueName: string;
+  seasonName: string;
+}
+
 export type UserProfileRole = typeof UserProfileRole[keyof typeof UserProfileRole];
 
 

@@ -71,6 +71,41 @@ export const GetDashboardResponse = zod.object({
 })
 
 
+/**
+ * @summary Check whether the active commissioner must initialize the league
+ */
+export const GetLeagueInitializationStatusResponse = zod.object({
+  "requiresInitialization": zod.boolean(),
+  "hasActiveLeague": zod.boolean(),
+  "hasActiveSeason": zod.boolean(),
+  "leagueName": zod.string().nullish()
+})
+
+
+/**
+ * @summary Create the first active league and season
+ */
+export const initializeLeagueBodyLeagueNameMax = 160;
+
+export const initializeLeagueBodySeasonNameMax = 160;
+
+
+
+export const InitializeLeagueBody = zod.object({
+  "leagueName": zod.string().min(1).max(initializeLeagueBodyLeagueNameMax),
+  "seasonName": zod.string().min(1).max(initializeLeagueBodySeasonNameMax),
+  "startDate": zod.coerce.date(),
+  "endDate": zod.coerce.date()
+})
+
+export const InitializeLeagueResponse = zod.object({
+  "leagueId": zod.int(),
+  "seasonId": zod.int(),
+  "leagueName": zod.string(),
+  "seasonName": zod.string()
+})
+
+
 export const getCurrentUserResponsePhoneRegExp = new RegExp('^\\+[1-9]\\d{1,14}$');
 
 

@@ -1,0 +1,76 @@
+Fix the Dirty 30 first-run commissioner experience.
+
+Current state:
+
+* External Clerk phone authentication is now working.
+* A commissioner can create/sign into their account.
+* The authenticated commissioner does not see a league because the production database does not yet contain an active league and active season.
+* Do NOT run the existing development seed against the production database because it creates fake teams, players, games, invitations, and scores.
+
+Implement a production-safe first-run league initialization flow.
+
+Requirements:
+
+1. Detect when an authenticated ACTIVE COMMISSIONER exists but there is no active league and/or no active season.
+
+2. Instead of allowing the dashboard to fail with "No active season configured", show a commissioner-only setup screen.
+
+3. The setup screen should allow the commissioner to enter:
+
+   * League name
+   * Season name
+   * Season start date
+   * Season end date
+
+4. On submission:
+
+   * create the league if one does not exist
+   * create the first season linked to that league
+   * mark the league active
+   * mark the season active
+   * use a database transaction
+   * prevent duplicate initialization if another request already created the records
+
+5. Do NOT create:
+
+   * demo teams
+   * fake players
+   * fake games
+   * fake scores
+   * fake invitations
+   * venues or courts automatically
+
+6. Only an ACTIVE COMMISSIONER may initialize the league.
+
+7. After successful setup:
+
+   * redirect to the normal commissioner dashboard
+   * dashboard should display the newly created league and season
+   * commissioner should then be able to create teams and continue normal beta setup
+
+8. Preserve the existing invitation-only authorization model.
+
+9. Do not change Clerk authentication or phone OTP behavior.
+
+10. Add tests covering:
+
+* commissioner sees initialization screen when no league exists
+* normal player cannot initialize a league
+* pending user cannot initialize a league
+* league + season creation succeeds
+* duplicate initialization is rejected safely
+* existing league/season bypasses initialization screen
+* dashboard loads after initialization
+
+11. Run the complete pnpm verify pipeline after implementation.
+
+Do not use or modify the development seed to solve this problem.
+
+Report:
+
+* files/areas changed
+* initialization flow result
+* authorization test result
+* database test result
+* pnpm verify result
+* whether the commissioner can now proceed from first login to an operational league

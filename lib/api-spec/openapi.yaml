@@ -37,6 +37,37 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Dashboard"
+  /league-initialization:
+    get:
+      operationId: getLeagueInitializationStatus
+      tags: [dashboard]
+      summary: Check whether the active commissioner must initialize the league
+      responses:
+        "200":
+          description: League initialization status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeagueInitializationStatus"
+    post:
+      operationId: initializeLeague
+      tags: [dashboard]
+      summary: Create the first active league and season
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeagueInitializationInput"
+      responses:
+        "201":
+          description: League initialized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeagueInitializationResult"
+        "409":
+          description: An active league and season already exist
   /me:
     get:
       operationId: getCurrentUser
@@ -580,6 +611,30 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Game"
+    LeagueInitializationStatus:
+      type: object
+      required: [requiresInitialization, hasActiveLeague, hasActiveSeason]
+      properties:
+        requiresInitialization: { type: boolean }
+        hasActiveLeague: { type: boolean }
+        hasActiveSeason: { type: boolean }
+        leagueName: { type: ["string", "null"] }
+    LeagueInitializationInput:
+      type: object
+      required: [leagueName, seasonName, startDate, endDate]
+      properties:
+        leagueName: { type: string, minLength: 1, maxLength: 160 }
+        seasonName: { type: string, minLength: 1, maxLength: 160 }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+    LeagueInitializationResult:
+      type: object
+      required: [leagueId, seasonId, leagueName, seasonName]
+      properties:
+        leagueId: { type: integer }
+        seasonId: { type: integer }
+        leagueName: { type: string }
+        seasonName: { type: string }
     UserProfile:
       type: object
       required: [id, firstName, lastName, phone, role, accessState]

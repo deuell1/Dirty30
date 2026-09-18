@@ -33,6 +33,9 @@ import type {
   HealthStatus,
   InvitationInput,
   InvitationResult,
+  LeagueInitializationInput,
+  LeagueInitializationResult,
+  LeagueInitializationStatus,
   ListGamesParams,
   Player,
   ProfileInput,
@@ -228,6 +231,154 @@ export function useGetDashboard<TData = Awaited<ReturnType<typeof getDashboard>>
 
 
 
+
+export const getGetLeagueInitializationStatusUrl = () => {
+
+
+
+
+  return `/api/league-initialization`
+}
+
+/**
+ * @summary Check whether the active commissioner must initialize the league
+ */
+export const getLeagueInitializationStatus = async ( options?: Parameters<typeof customFetch>[1]): Promise<LeagueInitializationStatus> => {
+
+  return customFetch<LeagueInitializationStatus>(getGetLeagueInitializationStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetLeagueInitializationStatusQueryKey = () => {
+    return [
+    `/api/league-initialization`
+    ] as const;
+    }
+
+
+export const getGetLeagueInitializationStatusQueryOptions = <TData = Awaited<ReturnType<typeof getLeagueInitializationStatus>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLeagueInitializationStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetLeagueInitializationStatusQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLeagueInitializationStatus>>> = ({ signal }) => getLeagueInitializationStatus({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getLeagueInitializationStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetLeagueInitializationStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getLeagueInitializationStatus>>>
+export type GetLeagueInitializationStatusQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Check whether the active commissioner must initialize the league
+ */
+
+export function useGetLeagueInitializationStatus<TData = Awaited<ReturnType<typeof getLeagueInitializationStatus>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLeagueInitializationStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetLeagueInitializationStatusQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getInitializeLeagueUrl = () => {
+
+
+
+
+  return `/api/league-initialization`
+}
+
+/**
+ * @summary Create the first active league and season
+ */
+export const initializeLeague = async (leagueInitializationInput: LeagueInitializationInput, options?: Parameters<typeof customFetch>[1]): Promise<LeagueInitializationResult> => {
+
+  return customFetch<LeagueInitializationResult>(getInitializeLeagueUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(leagueInitializationInput)
+  }
+);}
+
+
+
+
+
+export const getInitializeLeagueMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof initializeLeague>>, TError,{data: BodyType<LeagueInitializationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof initializeLeague>>, TError,{data: BodyType<LeagueInitializationInput>}, TContext> => {
+
+const mutationKey = ['initializeLeague'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof initializeLeague>>, {data: BodyType<LeagueInitializationInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  initializeLeague(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type InitializeLeagueMutationResult = NonNullable<Awaited<ReturnType<typeof initializeLeague>>>
+    export type InitializeLeagueMutationBody = BodyType<LeagueInitializationInput>
+    export type InitializeLeagueMutationError = ErrorType<void>
+
+    /**
+ * @summary Create the first active league and season
+ */
+export const useInitializeLeague = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof initializeLeague>>, TError,{data: BodyType<LeagueInitializationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof initializeLeague>>,
+        TError,
+        {data: BodyType<LeagueInitializationInput>},
+        TContext
+      > => {
+      return useMutation(getInitializeLeagueMutationOptions(options));
+    }
 
 export const getGetCurrentUserUrl = () => {
 

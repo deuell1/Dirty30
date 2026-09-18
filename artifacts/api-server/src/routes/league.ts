@@ -9,12 +9,15 @@ import {
   GetDashboardResponse,
   GetGameParams,
   GetGameResponse,
+  GetLeagueInitializationStatusResponse,
   GetScoreReviewQueueResponse,
   GetStandingsResponse,
   GetTeamParams,
   GetTeamResponse,
   GetTeamRosterParams,
   GetTeamRosterResponse,
+  InitializeLeagueBody,
+  InitializeLeagueResponse,
   ListGamesQueryParams,
   ListGamesResponse,
   ListTeamsResponse,
@@ -109,6 +112,26 @@ const courtInput = z.object({ name: z.string().trim().min(1).max(100) });
 const accountAccessInput = z.object({
   accessState: z.enum(["ACTIVE", "DISABLED"]),
 });
+const LEAGUE_INITIALIZATION_LOCK = 30031;
+
+class LeagueAlreadyInitializedError extends Error {
+  constructor() {
+    super("An active league and season already exist");
+    this.name = "LeagueAlreadyInitializedError";
+  }
+}
+
+async function activeLeagueAndSeason(database: typeof db = db) {
+  const league = await database.query.leagues.findFirst({
+    where: eq(leagues.active, true),
+  });
+  const season = league
+    ? await database.query.seasons.findFirst({
+        where: and(eq(seasons.leagueId, league.id), eq(seasons.active, true)),
+      })
+    : undefined;
+  return { league, season };
+}
 
 function statusForGame(
   status: typeof games.$inferSelect.status,
@@ -512,6 +535,97 @@ async function withScheduleMutationLock<T>(
     return operation(tx);
   });
 }
+
+router.get(
+  "/league-initialization",
+  requireCommissioner,
+  async (_req, res, next) => {
+    try {
+      const { league, season } = await activeLeagueAndSeason();
+      res.json(
+        GetLeagueInitializationStatusResponse.parse({
+          requiresInitialization: !league || !season,
+          hasActiveLeague: Boolean(league),
+          hasActiveSeason: Boolean(season),
+          leagueName: league?.name ?? null,
+        }),
+      );
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+router.post(
+  "/league-initialization",
+  requireCommissioner,
+  async (req, res, next) => {
+    try {
+      const input = InitializeLeagueBody.parse(req.body);
+      if (input.endDate < input.startDate) {
+        return res.status(422).json({
+          error: "Season end date must be on or after its start date",
+        });
+      }
+      const startDate = input.startDate.toISOString().slice(0, 10);
+      const endDate = input.endDate.toISOString().slice(0, 10);
+      const result = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(${LEAGUE_INITIALIZATION_LOCK})`,
+        );
+        const existingLeague = await tx.query.leagues.findFirst({
+          where: eq(leagues.active, true),
+        });
+        const existingSeason = existingLeague
+          ? await tx.query.seasons.findFirst({
+              where: and(
+                eq(seasons.leagueId, existingLeague.id),
+                eq(seasons.active, true),
+              ),
+            })
+          : undefined;
+        if (existingLeague && existingSeason) {
+          throw new LeagueAlreadyInitializedError();
+        }
+
+        const league =
+          existingLeague ??
+          (
+            await tx
+              .insert(leagues)
+              .values({ name: input.leagueName.trim(), active: true })
+              .returning()
+          )[0];
+        if (!league) throw new Error("Failed to create the active league");
+
+        const [season] = await tx
+          .insert(seasons)
+          .values({
+            leagueId: league.id,
+            name: input.seasonName.trim(),
+            startDate,
+            endDate,
+            active: true,
+          })
+          .returning();
+        if (!season) throw new Error("Failed to create the active season");
+
+        return InitializeLeagueResponse.parse({
+          leagueId: league.id,
+          seasonId: season.id,
+          leagueName: league.name,
+          seasonName: season.name,
+        });
+      });
+      return res.status(201).json(result);
+    } catch (error) {
+      if (error instanceof LeagueAlreadyInitializedError) {
+        return res.status(409).json({ error: error.message });
+      }
+      return next(error);
+    }
+  },
+);
 
 router.get("/dashboard", async (_req, res, next) => {
   try {

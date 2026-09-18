@@ -2,3 +2,4 @@
 - [Dirty-30 phone OTP prerequisite](dirty30-phone-otp-prerequisite.md) — Replit-managed Clerk currently lacks SMS phone auth; phone login needs a supported configured Clerk tenant before release.
 - [GitHub publishing connector](github-publishing-connector.md) — validate ref mutation early; the connected GitHub OAuth flow may create objects but still deny branch updates.
 - [Dirty-30 test database ownership](dirty30-test-database-ownership.md) — integration verification assumes migrations exclusively own the dedicated test database’s public schema.
+- [Patch-created file newlines](patch-created-file-newlines.md) — new files may need a uniquely anchored explicit final blank line to satisfy Prettier.

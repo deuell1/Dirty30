@@ -10,6 +10,7 @@ import {
   getGetCurrentUserQueryKey,
   getGetDashboardQueryKey,
   getGetGameQueryKey,
+  getGetLeagueInitializationStatusQueryKey,
   getGetScoreReviewQueueQueryKey,
   getGetStandingsQueryKey,
   getListGamesQueryKey,
@@ -18,6 +19,7 @@ import {
   useCreateTeam,
   useDisputeScore,
   useGetCurrentUser,
+  useGetLeagueInitializationStatus,
   useGetScoreReviewQueue,
   useGetStandings,
   useHealthCheck,
@@ -31,6 +33,10 @@ import { ErrorBoundary } from "@/components/error-boundary";
 import { PhoneAuthScreen } from "@/components/phone-auth";
 import { ScoreActions } from "@/components/score-actions";
 import { pendingSurface } from "@/components/invitation-flow";
+import {
+  LeagueInitializationScreen,
+  shouldShowLeagueInitialization,
+} from "@/components/league-initialization";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import {
@@ -342,6 +348,15 @@ export function AuthBoundary() {
       queryKey: getGetCurrentUserQueryKey(),
     },
   });
+  const shouldCheckInitialization =
+    profile.data?.role === DashboardRole.COMMISSIONER &&
+    profile.data.accessState === "ACTIVE";
+  const initialization = useGetLeagueInitializationStatus({
+    query: {
+      enabled: shouldCheckInitialization,
+      queryKey: getGetLeagueInitializationStatusQueryKey(),
+    },
+  });
   useEffect(() => {
     setAuthTokenGetter(() => getToken());
     return () => setAuthTokenGetter(null);
@@ -378,6 +393,30 @@ export function AuthBoundary() {
         retrying={profile.isFetching}
       />
     );
+  if (
+    shouldCheckInitialization &&
+    (initialization.isLoading || initialization.isFetching)
+  )
+    return (
+      <div className="grid min-h-[100dvh] place-items-center">
+        Checking league setup…
+      </div>
+    );
+  if (shouldCheckInitialization && initialization.error)
+    return (
+      <AccessUnavailableScreen
+        onRetry={() => void initialization.refetch()}
+        retrying={initialization.isFetching}
+      />
+    );
+  if (
+    shouldShowLeagueInitialization(
+      profile.data?.role,
+      profile.data?.accessState,
+      initialization.data,
+    )
+  )
+    return <LeagueInitializationScreen status={initialization.data!} />;
   const surface = profile.data
     ? pendingSurface(location, profile.data.accessState)
     : "active";

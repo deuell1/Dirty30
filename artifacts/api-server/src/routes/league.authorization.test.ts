@@ -79,6 +79,17 @@ describe("league route authorization boundary", () => {
   });
 
   it.each([
+    [
+      "initializes the league",
+      "post",
+      "/league-initialization",
+      {
+        leagueName: "Dirty 30",
+        seasonName: "Fall 2026",
+        startDate: "2026-09-01",
+        endDate: "2026-12-01",
+      },
+    ],
     ["creates teams", "post", "/teams", { name: "Amber" }],
     ["reads the commissioner review queue", "get", "/scores/review", undefined],
     [
@@ -123,4 +134,19 @@ describe("league route authorization boundary", () => {
       });
     },
   );
+
+  it("blocks a pending user from initializing a league", async () => {
+    state.role = "COMMISSIONER";
+    state.accessState = "PENDING";
+    const response = await request(app).post("/league-initialization").send({
+      leagueName: "Dirty 30",
+      seasonName: "Fall 2026",
+      startDate: "2026-09-01",
+      endDate: "2026-12-01",
+    });
+    expect(response.status).toBe(403);
+    expect(response.body).toEqual({
+      error: "An active league invitation is required",
+    });
+  });
 });
