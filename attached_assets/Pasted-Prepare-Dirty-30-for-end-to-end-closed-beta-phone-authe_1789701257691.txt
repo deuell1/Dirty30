@@ -1,0 +1,52 @@
+Prepare Dirty 30 for end-to-end closed-beta phone authentication verification.
+
+Do not add new product features and do not expand beyond the existing beta scope: roster management, scheduling, score reporting/review, and standings.
+
+The codebase, PostgreSQL integration tests, production builds, and GitHub CI are currently green. Preserve that behavior.
+
+Focus only on validating the existing Clerk phone-number authentication implementation with the configured Clerk tenant.
+
+Verify the following:
+
+1. The application uses phone number as the sign-up and sign-in identifier.
+2. SMS OTP verification is enabled and functional.
+3. Email/password and social sign-in are not exposed in the beta UI.
+4. The configured Clerk publishable and secret keys correspond to the same supported Clerk tenant.
+5. BOOTSTRAP_COMMISSIONER_PHONE correctly promotes the matching verified phone identity to an ACTIVE COMMISSIONER.
+6. A verified phone number without an invitation receives PENDING access and cannot enumerate league data.
+7. A captain invitation can be accepted only by the matching verified phone number.
+8. Accepting a valid invitation creates or activates the correct league/team membership.
+9. Authorization remains server-enforced for commissioner, captain, and player roles.
+
+Then perform an end-to-end beta smoke test using test identities where possible:
+
+Commissioner sign-in
+→ create/send captain invitation
+→ captain sign-in
+→ captain accepts invitation
+→ captain views team
+→ captain manages roster within the 8-player limit
+→ commissioner publishes schedule
+→ captain submits a score
+→ opposing captain confirms or disputes the score
+→ commissioner resolves a dispute if applicable
+→ finalized result updates standings.
+
+Do not bypass Clerk authentication, fabricate authenticated sessions, disable authorization checks, or replace phone authentication with email authentication just to make the test pass.
+
+After verification, run the complete existing pnpm verify pipeline again.
+
+Report:
+
+* Clerk configuration status
+* SMS OTP status
+* commissioner authentication result
+* captain invitation/authentication result
+* roster test result
+* schedule test result
+* score workflow result
+* standings result
+* pnpm verify result
+* any remaining external blocker
+
+If real SMS OTP cannot be completed because of Clerk account configuration, stop and clearly identify the exact Clerk setting or account capability that must be changed. Do not modify application behavior to work around it.
