@@ -1,0 +1,132 @@
+Perform a production-safe cleanup of the old Dirty 30 development seed data.
+
+Important:
+This is a destructive database operation. Do not modify anything until the target production records have been positively identified.
+
+Goal:
+Remove only the old development/demo seed dataset so the real authenticated commissioner can be presented with the new “Start your league” initialization flow.
+
+Preserve:
+
+* the PostgreSQL database itself
+* all database migrations and schema
+* migration history
+* the currently authenticated real commissioner user created through the new external Clerk application
+* that commissioner’s current Clerk external auth linkage
+* Clerk configuration and environment variables
+* application code
+* audit infrastructure/schema
+
+The old seeded dataset is recognizable by these records:
+
+League:
+
+* Dirty 30 Beer League
+
+Season:
+
+* Summer 2026
+
+Seeded teams:
+
+* Hops & Dreams
+* Pitch Please
+* Ale Stars
+* The Keg Stands
+
+Seeded venue:
+
+* Lakeside Sports Center
+
+Seeded courts:
+
+* Court 1
+* Court 2 associated with that seeded venue
+
+The development seed also created:
+
+* demo games
+* demo team memberships
+* demo players/captains
+* a demo pending invitation
+* seeded user records
+
+Before deleting anything:
+
+1. Query the production database read-only.
+2. Report counts for:
+
+   * leagues
+   * seasons
+   * teams
+   * venues
+   * courts
+   * games
+   * team memberships
+   * player invitations
+   * users
+3. Identify which records clearly belong to the old development seed.
+4. Identify the real current commissioner account separately.
+5. Confirm the real commissioner account will not be deleted.
+
+Do not expose:
+
+* phone numbers
+* emails
+* Clerk IDs
+* invitation tokens
+* database credentials
+* secrets
+
+Once the seeded records are positively identified, perform the cleanup inside a database transaction.
+
+Delete seeded records in dependency-safe order, including as applicable:
+
+* seeded audit/event records tied to seeded entities
+* seeded invitations
+* seeded games
+* seeded memberships
+* seeded demo users
+* seeded courts
+* seeded venue
+* seeded teams
+* seeded season
+* seeded league
+
+Critical safety requirement:
+Do not delete the real authenticated commissioner user.
+
+If there is any ambiguity about which user is the real commissioner versus a seeded user, stop before deleting users and report the ambiguity instead of guessing.
+
+After cleanup:
+
+1. Confirm there are:
+
+   * zero active leagues
+   * zero active seasons
+   * zero seeded teams
+   * zero seeded games
+   * zero seeded invitations
+2. Confirm the real commissioner user still exists and is:
+
+   * role: COMMISSIONER
+   * accessState: ACTIVE
+   * active: true
+3. Confirm the production database schema and migration history are unchanged.
+4. Run the complete pnpm verify pipeline.
+5. Check production health/readiness.
+6. Do not automatically create a new league or season.
+
+Expected result:
+The next time the real commissioner signs into Dirty 30, GET /api/league-initialization should return requiresInitialization: true and the application should show the “Start your league” screen.
+
+Report:
+
+* records identified as seeded
+* records removed
+* commissioner preservation result
+* active league count after cleanup
+* active season count after cleanup
+* pnpm verify result
+* production health result
+* whether “Start your league” should now appear
