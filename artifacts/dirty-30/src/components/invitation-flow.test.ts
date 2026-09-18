@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { pendingSurface, refreshAfterInvitationAcceptance } from "./invitation-flow";
+import {
+  pendingSurface,
+  refreshAfterInvitationAcceptance,
+} from "./invitation-flow";
 
 describe("closed-beta invitation access flow", () => {
   it("lets a pending signed-in user render only the invitation surface", () => {

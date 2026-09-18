@@ -2,9 +2,18 @@ import app from "./app";
 import { logger } from "./lib/logger";
 
 if (process.env.NODE_ENV === "production") {
-  const required = ["DATABASE_URL", "CLERK_SECRET_KEY", "VITE_CLERK_PUBLISHABLE_KEY", "BOOTSTRAP_COMMISSIONER_PHONE", "APP_ORIGIN"];
+  const required = [
+    "DATABASE_URL",
+    "CLERK_SECRET_KEY",
+    "VITE_CLERK_PUBLISHABLE_KEY",
+    "BOOTSTRAP_COMMISSIONER_PHONE",
+    "APP_ORIGIN",
+  ];
   const missing = required.filter((name) => !process.env[name]?.trim());
-  if (missing.length) throw new Error(`Production configuration is missing required environment variable names: ${missing.join(", ")}`);
+  if (missing.length)
+    throw new Error(
+      `Production configuration is missing required environment variable names: ${missing.join(", ")}`,
+    );
   try {
     new URL(process.env.APP_ORIGIN!);
   } catch {

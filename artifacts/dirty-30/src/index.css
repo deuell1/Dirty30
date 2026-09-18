@@ -1,6 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
-@import 'tailwindcss';
-@import 'tw-animate-css';
+@import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=DM+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap");
+@import "tailwindcss";
+@import "tw-animate-css";
 @plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
@@ -60,8 +60,8 @@
   --sidebar-primary-foreground: 166 19% 13%;
   --sidebar-accent: 166 14% 20%;
   --sidebar-accent-foreground: 42 43% 94%;
-  --app-font-sans: 'DM Sans', sans-serif;
-  --app-font-mono: 'Space Mono', monospace;
+  --app-font-sans: "DM Sans", sans-serif;
+  --app-font-mono: "Space Mono", monospace;
   --radius: 14px;
 }
 
@@ -93,41 +93,73 @@
 }
 
 @layer base {
-  * { @apply border-border; }
+  * {
+    @apply border-border;
+  }
   body {
     @apply font-sans antialiased bg-background text-foreground;
     min-width: 320px;
   }
-  button, a, input, select { -webkit-tap-highlight-color: transparent; }
+  button,
+  a,
+  input,
+  select {
+    -webkit-tap-highlight-color: transparent;
+  }
 }
 
 @layer utilities {
-  .font-display { font-family: 'Bricolage Grotesque', sans-serif; }
-  .font-mono-custom { font-family: 'Space Mono', monospace; }
+  .font-display {
+    font-family: "Bricolage Grotesque", sans-serif;
+  }
+  .font-mono-custom {
+    font-family: "Space Mono", monospace;
+  }
   .paper-grid {
-    background-image: linear-gradient(hsl(var(--border) / .36) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--border) / .36) 1px, transparent 1px);
+    background-image:
+      linear-gradient(hsl(var(--border) / 0.36) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--border) / 0.36) 1px, transparent 1px);
     background-size: 24px 24px;
   }
   .noise::after {
-    content: '';
+    content: "";
     position: fixed;
     inset: 0;
     pointer-events: none;
-    opacity: .035;
+    opacity: 0.035;
     z-index: 20;
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E");
   }
-  .animate-rise { animation: rise .55s cubic-bezier(.2,.8,.2,1) both; }
-  .animate-rise-delay { animation: rise .55s .09s cubic-bezier(.2,.8,.2,1) both; }
-  .animate-rise-delay-2 { animation: rise .55s .18s cubic-bezier(.2,.8,.2,1) both; }
-  .animate-pulse-soft { animation: pulse-soft 2.4s ease-in-out infinite; }
+  .animate-rise {
+    animation: rise 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  .animate-rise-delay {
+    animation: rise 0.55s 0.09s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  .animate-rise-delay-2 {
+    animation: rise 0.55s 0.18s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  .animate-pulse-soft {
+    animation: pulse-soft 2.4s ease-in-out infinite;
+  }
 }
 
 @keyframes rise {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 @keyframes pulse-soft {
-  0%, 100% { opacity: .65; }
-  50% { opacity: 1; }
+  0%,
+  100% {
+    opacity: 0.65;
+  }
+  50% {
+    opacity: 1;
+  }
 }

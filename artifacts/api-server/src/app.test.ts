@@ -2,7 +2,8 @@ import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@clerk/express", () => ({
-  clerkMiddleware: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+  clerkMiddleware: () => (_req: unknown, _res: unknown, next: () => void) =>
+    next(),
   getAuth: () => ({ userId: null }),
   clerkClient: { users: { getUser: vi.fn() } },
 }));

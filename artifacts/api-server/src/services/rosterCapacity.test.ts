@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { MAX_ROSTER_POSITIONS, occupiedRosterPositions, RosterCapacityError } from "./rosterCapacity";
+import {
+  MAX_ROSTER_POSITIONS,
+  occupiedRosterPositions,
+  RosterCapacityError,
+} from "./rosterCapacity";
 
 describe("roster capacity rules", () => {
   it("counts active memberships toward the eight occupied positions", () => {

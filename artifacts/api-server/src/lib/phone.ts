@@ -7,7 +7,10 @@ import { parsePhoneNumberFromString } from "libphonenumber-js";
 export function normalizeUsPhone(value: string): string {
   const phone = parsePhoneNumberFromString(value.trim(), "US");
   if (!phone?.isValid() || phone.country !== "US") {
-    throw Object.assign(new Error("Enter a valid United States mobile number"), { status: 422 });
+    throw Object.assign(
+      new Error("Enter a valid United States mobile number"),
+      { status: 422 },
+    );
   }
 
   return phone.number;

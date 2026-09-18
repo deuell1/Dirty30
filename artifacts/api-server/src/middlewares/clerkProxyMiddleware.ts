@@ -5,7 +5,9 @@ import { createProxyMiddleware } from "http-proxy-middleware";
 const CLERK_FAPI = "https://frontend-api.clerk.dev";
 export const CLERK_PROXY_PATH = "/api/__clerk";
 
-export function getClerkProxyHost(req: { headers: IncomingHttpHeaders }): string | undefined {
+export function getClerkProxyHost(req: {
+  headers: IncomingHttpHeaders;
+}): string | undefined {
   const forwarded = req.headers["x-forwarded-host"];
   const raw = Array.isArray(forwarded) ? forwarded[0] : forwarded;
   return raw?.split(",")[0]?.trim() || req.headers.host?.trim() || undefined;
@@ -20,12 +22,16 @@ export function clerkProxyMiddleware(): RequestHandler {
     target: CLERK_FAPI,
     changeOrigin: true,
     selfHandleResponse: true,
-    pathRewrite: (path: string) => path.replace(new RegExp(`^${CLERK_PROXY_PATH}`), ""),
+    pathRewrite: (path: string) =>
+      path.replace(new RegExp(`^${CLERK_PROXY_PATH}`), ""),
     on: {
       proxyReq: (proxyReq, req) => {
         const protocol = req.headers["x-forwarded-proto"] || "https";
         const host = getClerkProxyHost(req) || "";
-        proxyReq.setHeader("Clerk-Proxy-Url", `${protocol}://${host}${CLERK_PROXY_PATH}`);
+        proxyReq.setHeader(
+          "Clerk-Proxy-Url",
+          `${protocol}://${host}${CLERK_PROXY_PATH}`,
+        );
         proxyReq.setHeader("Clerk-Secret-Key", process.env.CLERK_SECRET_KEY!);
       },
       proxyRes: (proxyRes, req, res) => {
@@ -34,7 +40,11 @@ export function clerkProxyMiddleware(): RequestHandler {
         delete headers.connection;
         delete headers["keep-alive"];
         const status = proxyRes.statusCode ?? 502;
-        const bodyless = req.method === "HEAD" || status < 200 || status === 204 || status === 304;
+        const bodyless =
+          req.method === "HEAD" ||
+          status < 200 ||
+          status === 204 ||
+          status === 304;
         if (bodyless) delete headers["content-length"];
         if (headers["content-length"] !== undefined || bodyless) {
           res.writeHead(status, headers);

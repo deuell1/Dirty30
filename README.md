@@ -4,15 +4,15 @@ Dirty-30 is invitation-only. A verified phone number without a matching roster i
 
 ### Authorization matrix
 
-| Endpoint group | Required access |
-| --- | --- |
-| `/api/healthz`, `/api/readyz` | Public operational endpoint |
-| `/api/me`, `POST /api/invitations/:token/accept` | Authenticated PENDING or ACTIVE account |
-| Dashboard, teams, rosters, schedule, standings, score detail | ACTIVE account |
-| Venues, courts, draft/publish/cancel schedule, account access changes, score resolution/correction | Commissioner |
-| Team invitations and membership changes | Commissioner or captain of that team |
-| Submit a score | Commissioner or captain of a participating team |
-| Confirm or dispute a score | Commissioner or captain of the opposing team |
+| Endpoint group                                                                                     | Required access                                 |
+| -------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `/api/healthz`, `/api/readyz`                                                                      | Public operational endpoint                     |
+| `/api/me`, `POST /api/invitations/:token/accept`                                                   | Authenticated PENDING or ACTIVE account         |
+| Dashboard, teams, rosters, schedule, standings, score detail                                       | ACTIVE account                                  |
+| Venues, courts, draft/publish/cancel schedule, account access changes, score resolution/correction | Commissioner                                    |
+| Team invitations and membership changes                                                            | Commissioner or captain of that team            |
+| Submit a score                                                                                     | Commissioner or captain of a participating team |
+| Confirm or dispute a score                                                                         | Commissioner or captain of the opposing team    |
 
 The executable route map is maintained in `artifacts/api-server/src/services/authorizationMatrix.ts`. Phone numbers are not returned by general roster views; pending accounts cannot enumerate league records.
 
@@ -44,6 +44,7 @@ curl -fsS http://127.0.0.1:8080/api/readyz
 The integration runner refuses to run if `TEST_DATABASE_URL` is missing or equals `DATABASE_URL`. CI provisions its own PostgreSQL service. Run the database migration before build/start, never run the development seed in production, and use a supported Clerk test-phone OTP journey before declaring phone authentication verified.
 
 Live phone OTP smoke testing remains **BLOCKED** until a user-owned Clerk tenant with SMS phone OTP is connected. Configure Phone number as the sole sign-in identifier, enable SMS verification, disable email/password and social options, add supported Clerk publishable/secret keys and the bootstrap phone as Replit Secrets, and use Clerk test phone numbers/codes for staging before enabling paid production SMS.
+
 # Dirty-30
 
 Dirty-30 is a mobile-first home base for an adult recreational beer league. It keeps teams, rosters, schedules, submitted scores, review status, and standings in one phone-friendly application.

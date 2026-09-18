@@ -10,7 +10,10 @@ describe("commissioner direct-score policy", () => {
     expect(canCommissionerDirectScore("FINAL")).toBe(true);
   });
 
-  it.each(["DRAFT", "CANCELLED", "PENDING_CONFIRMATION", "DISPUTED"])("rejects direct score entry for %s games", (status) => {
-    expect(canCommissionerDirectScore(status)).toBe(false);
-  });
+  it.each(["DRAFT", "CANCELLED", "PENDING_CONFIRMATION", "DISPUTED"])(
+    "rejects direct score entry for %s games",
+    (status) => {
+      expect(canCommissionerDirectScore(status)).toBe(false);
+    },
+  );
 });

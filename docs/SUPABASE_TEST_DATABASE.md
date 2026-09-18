@@ -26,4 +26,8 @@ pnpm --filter @workspace/db run migrate:test
 
 The connection check prints only success or a sanitized error. It never prints the connection string.
 
+For Supabase Session Pooler URLs using `sslmode=require`, the test tooling enables
+the PostgreSQL driver's libpq-compatible SSL semantics. The connection remains
+encrypted without requiring Node to trust Supabase's pooler certificate chain.
+
 If authentication fails, reset the Supabase database password and replace the complete Replit secret. The pooler username must be `postgres.<project-ref>`.

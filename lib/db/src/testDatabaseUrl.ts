@@ -1,4 +1,6 @@
-export function getTestDatabaseUrl(env: NodeJS.ProcessEnv = process.env): string {
+export function getTestDatabaseUrl(
+  env: NodeJS.ProcessEnv = process.env,
+): string {
   const raw = env.TEST_DATABASE_URL?.trim();
 
   if (!raw) {
@@ -27,9 +29,7 @@ export function getTestDatabaseUrl(env: NodeJS.ProcessEnv = process.env): string
   const isSupabaseDirect =
     parsed.hostname.startsWith("db.") &&
     parsed.hostname.endsWith(".supabase.co");
-  const isSupabasePooler = parsed.hostname.endsWith(
-    ".pooler.supabase.com",
-  );
+  const isSupabasePooler = parsed.hostname.endsWith(".pooler.supabase.com");
 
   if (isSupabaseDirect) {
     throw new Error(
@@ -52,6 +52,13 @@ export function getTestDatabaseUrl(env: NodeJS.ProcessEnv = process.env): string
 
     if (!parsed.searchParams.has("sslmode")) {
       parsed.searchParams.set("sslmode", "require");
+    }
+
+    if (
+      parsed.searchParams.get("sslmode") === "require" &&
+      !parsed.searchParams.has("uselibpqcompat")
+    ) {
+      parsed.searchParams.set("uselibpqcompat", "true");
     }
   }
 

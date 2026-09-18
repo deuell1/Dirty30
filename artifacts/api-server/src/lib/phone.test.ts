@@ -8,7 +8,11 @@ describe("normalizeUsPhone", () => {
   });
 
   it("rejects invalid or non-US values before they reach identity or invitations", () => {
-    expect(() => normalizeUsPhone("555-0100")).toThrow("valid United States mobile number");
-    expect(() => normalizeUsPhone("+44 20 7946 0018")).toThrow("valid United States mobile number");
+    expect(() => normalizeUsPhone("555-0100")).toThrow(
+      "valid United States mobile number",
+    );
+    expect(() => normalizeUsPhone("+44 20 7946 0018")).toThrow(
+      "valid United States mobile number",
+    );
   });
 });

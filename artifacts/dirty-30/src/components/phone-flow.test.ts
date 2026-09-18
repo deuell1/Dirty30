@@ -7,8 +7,12 @@ describe("phone OTP interface helpers", () => {
   });
 
   it("rejects incomplete and non-US phone values before requesting an SMS", () => {
-    expect(() => normalizePhoneForAuth("555-0100")).toThrow("valid United States mobile number");
-    expect(() => normalizePhoneForAuth("+44 20 7946 0018")).toThrow("valid United States mobile number");
+    expect(() => normalizePhoneForAuth("555-0100")).toThrow(
+      "valid United States mobile number",
+    );
+    expect(() => normalizePhoneForAuth("+44 20 7946 0018")).toThrow(
+      "valid United States mobile number",
+    );
   });
 
   it("allows resend only after cooldown and pending work finish", () => {

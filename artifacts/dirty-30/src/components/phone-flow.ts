@@ -2,7 +2,8 @@ import { parsePhoneNumberFromString } from "libphonenumber-js";
 
 export function normalizePhoneForAuth(value: string) {
   const phone = parsePhoneNumberFromString(value.trim(), "US");
-  if (!phone?.isValid() || phone.country !== "US") throw new Error("Enter a valid United States mobile number.");
+  if (!phone?.isValid() || phone.country !== "US")
+    throw new Error("Enter a valid United States mobile number.");
   return phone.number;
 }
 

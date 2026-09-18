@@ -13,10 +13,18 @@ router.get("/healthz", (_req, res) => {
 router.get("/readyz", async (_req, res) => {
   try {
     await db.execute(sql`SELECT 1`);
-    const required = process.env.NODE_ENV === "production"
-      ? ["DATABASE_URL", "CLERK_SECRET_KEY", "VITE_CLERK_PUBLISHABLE_KEY", "BOOTSTRAP_COMMISSIONER_PHONE", "APP_ORIGIN"]
-      : [];
-    if (required.some((name) => !process.env[name]?.trim())) return res.status(503).json({ status: "unavailable" });
+    const required =
+      process.env.NODE_ENV === "production"
+        ? [
+            "DATABASE_URL",
+            "CLERK_SECRET_KEY",
+            "VITE_CLERK_PUBLISHABLE_KEY",
+            "BOOTSTRAP_COMMISSIONER_PHONE",
+            "APP_ORIGIN",
+          ]
+        : [];
+    if (required.some((name) => !process.env[name]?.trim()))
+      return res.status(503).json({ status: "unavailable" });
     return res.json({ status: "ready" });
   } catch {
     return res.status(503).json({ status: "unavailable" });

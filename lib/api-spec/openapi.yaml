@@ -44,17 +44,29 @@ paths:
       responses:
         "200":
           description: Current authenticated user
-          content: { application/json: { schema: { $ref: "#/components/schemas/UserProfile" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/UserProfile" } },
+            }
     patch:
       operationId: updateCurrentUser
       tags: [profile]
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/ProfileInput" } } }
+        content:
+          {
+            application/json:
+              { schema: { $ref: "#/components/schemas/ProfileInput" } },
+          }
       responses:
         "200":
           description: Updated user
-          content: { application/json: { schema: { $ref: "#/components/schemas/UserProfile" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/UserProfile" } },
+            }
   /teams:
     get:
       operationId: listTeams
@@ -136,19 +148,27 @@ paths:
     patch:
       operationId: assignTeamCaptain
       tags: [teams]
-      parameters: [ { $ref: "#/components/parameters/TeamId" } ]
+      parameters: [{ $ref: "#/components/parameters/TeamId" }]
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/CaptainInput" } } }
+        content:
+          {
+            application/json:
+              { schema: { $ref: "#/components/schemas/CaptainInput" } },
+          }
       responses: { "204": { description: Captain assigned } }
   /teams/{teamId}/active:
     patch:
       operationId: setTeamActive
       tags: [teams]
-      parameters: [ { $ref: "#/components/parameters/TeamId" } ]
+      parameters: [{ $ref: "#/components/parameters/TeamId" }]
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/ActiveInput" } } }
+        content:
+          {
+            application/json:
+              { schema: { $ref: "#/components/schemas/ActiveInput" } },
+          }
       responses:
         "200":
           description: Team updated
@@ -159,10 +179,14 @@ paths:
     post:
       operationId: createInvitation
       tags: [teams]
-      parameters: [ { $ref: "#/components/parameters/TeamId" } ]
+      parameters: [{ $ref: "#/components/parameters/TeamId" }]
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/InvitationInput" } } }
+        content:
+          {
+            application/json:
+              { schema: { $ref: "#/components/schemas/InvitationInput" } },
+          }
       responses:
         "201":
           description: Invitation created
@@ -173,13 +197,21 @@ paths:
     delete:
       operationId: cancelInvitation
       tags: [teams]
-      parameters: [ { $ref: "#/components/parameters/TeamId" }, { $ref: "#/components/parameters/InvitationId" } ]
+      parameters:
+        [
+          { $ref: "#/components/parameters/TeamId" },
+          { $ref: "#/components/parameters/InvitationId" },
+        ]
       responses: { "204": { description: Invitation cancelled } }
   /teams/{teamId}/invitations/{invitationId}/regenerate:
     post:
       operationId: regenerateInvitation
       tags: [teams]
-      parameters: [ { $ref: "#/components/parameters/TeamId" }, { $ref: "#/components/parameters/InvitationId" } ]
+      parameters:
+        [
+          { $ref: "#/components/parameters/TeamId" },
+          { $ref: "#/components/parameters/InvitationId" },
+        ]
       responses:
         "200":
           description: New invitation link
@@ -190,13 +222,17 @@ paths:
     delete:
       operationId: removeTeamPlayer
       tags: [teams]
-      parameters: [ { $ref: "#/components/parameters/TeamId" }, { $ref: "#/components/parameters/UserId" } ]
+      parameters:
+        [
+          { $ref: "#/components/parameters/TeamId" },
+          { $ref: "#/components/parameters/UserId" },
+        ]
       responses: { "204": { description: Player removed } }
   /invitations/{token}/accept:
     post:
       operationId: acceptInvitation
       tags: [teams]
-      parameters: [ { $ref: "#/components/parameters/InvitationToken" } ]
+      parameters: [{ $ref: "#/components/parameters/InvitationToken" }]
       responses:
         "200":
           description: Invitation accepted
@@ -231,11 +267,19 @@ paths:
       tags: [schedule]
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/GameInput" } } }
+        content:
+          {
+            application/json:
+              { schema: { $ref: "#/components/schemas/GameInput" } },
+          }
       responses:
         "201":
           description: Draft game created
-          content: { application/json: { schema: { $ref: "#/components/schemas/Game" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/Game" } },
+            }
   /schedule/{gameId}:
     get:
       operationId: getGame
@@ -252,25 +296,33 @@ paths:
     patch:
       operationId: updateGame
       tags: [schedule]
-      parameters: [ { $ref: "#/components/parameters/GameId" } ]
+      parameters: [{ $ref: "#/components/parameters/GameId" }]
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/GameInput" } } }
+        content:
+          {
+            application/json:
+              { schema: { $ref: "#/components/schemas/GameInput" } },
+          }
       responses:
         "200":
           description: Game updated
-          content: { application/json: { schema: { $ref: "#/components/schemas/Game" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/Game" } },
+            }
   /schedule/{gameId}/publish:
     post:
       operationId: publishGame
       tags: [schedule]
-      parameters: [ { $ref: "#/components/parameters/GameId" } ]
+      parameters: [{ $ref: "#/components/parameters/GameId" }]
       responses: { "204": { description: Game published } }
   /schedule/{gameId}/cancel:
     post:
       operationId: cancelGame
       tags: [schedule]
-      parameters: [ { $ref: "#/components/parameters/GameId" } ]
+      parameters: [{ $ref: "#/components/parameters/GameId" }]
       responses: { "204": { description: Game cancelled } }
   /venues:
     get:
@@ -281,63 +333,97 @@ paths:
           description: Venues
           content:
             application/json:
-              schema: { type: array, items: { $ref: "#/components/schemas/Venue" } }
+              schema:
+                { type: array, items: { $ref: "#/components/schemas/Venue" } }
     post:
       operationId: createVenue
       tags: [schedule]
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/VenueInput" } } }
+        content:
+          {
+            application/json:
+              { schema: { $ref: "#/components/schemas/VenueInput" } },
+          }
       responses:
         "201":
           description: Venue created
-          content: { application/json: { schema: { $ref: "#/components/schemas/Venue" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/Venue" } },
+            }
   /venues/{venueId}:
     patch:
       operationId: updateVenue
       tags: [schedule]
-      parameters: [ { $ref: "#/components/parameters/VenueId" } ]
+      parameters: [{ $ref: "#/components/parameters/VenueId" }]
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/VenueUpdate" } } }
+        content:
+          {
+            application/json:
+              { schema: { $ref: "#/components/schemas/VenueUpdate" } },
+          }
       responses:
         "200":
           description: Venue updated
-          content: { application/json: { schema: { $ref: "#/components/schemas/Venue" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/Venue" } },
+            }
   /venues/{venueId}/courts:
     get:
       operationId: listCourts
       tags: [schedule]
-      parameters: [ { $ref: "#/components/parameters/VenueId" } ]
+      parameters: [{ $ref: "#/components/parameters/VenueId" }]
       responses:
         "200":
           description: Courts
           content:
             application/json:
-              schema: { type: array, items: { $ref: "#/components/schemas/Court" } }
+              schema:
+                { type: array, items: { $ref: "#/components/schemas/Court" } }
     post:
       operationId: createCourt
       tags: [schedule]
-      parameters: [ { $ref: "#/components/parameters/VenueId" } ]
+      parameters: [{ $ref: "#/components/parameters/VenueId" }]
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/CourtInput" } } }
+        content:
+          {
+            application/json:
+              { schema: { $ref: "#/components/schemas/CourtInput" } },
+          }
       responses:
         "201":
           description: Court created
-          content: { application/json: { schema: { $ref: "#/components/schemas/Court" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/Court" } },
+            }
   /courts/{courtId}:
     patch:
       operationId: updateCourt
       tags: [schedule]
-      parameters: [ { $ref: "#/components/parameters/CourtId" } ]
+      parameters: [{ $ref: "#/components/parameters/CourtId" }]
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/CourtUpdate" } } }
+        content:
+          {
+            application/json:
+              { schema: { $ref: "#/components/schemas/CourtUpdate" } },
+          }
       responses:
         "200":
           description: Court updated
-          content: { application/json: { schema: { $ref: "#/components/schemas/Court" } } }
+          content:
+            {
+              application/json:
+                { schema: { $ref: "#/components/schemas/Court" } },
+            }
   /standings:
     get:
       operationId: getStandings
@@ -373,10 +459,14 @@ paths:
     patch:
       operationId: correctScore
       tags: [scores]
-      parameters: [ { $ref: "#/components/parameters/GameId" } ]
+      parameters: [{ $ref: "#/components/parameters/GameId" }]
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/ScoreInput" } } }
+        content:
+          {
+            application/json:
+              { schema: { $ref: "#/components/schemas/ScoreInput" } },
+          }
       responses: { "204": { description: Score entered or corrected } }
   /scores/review:
     get:
@@ -419,10 +509,14 @@ paths:
     post:
       operationId: resolveScore
       tags: [scores]
-      parameters: [ { $ref: "#/components/parameters/GameId" } ]
+      parameters: [{ $ref: "#/components/parameters/GameId" }]
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/ScoreInput" } } }
+        content:
+          {
+            application/json:
+              { schema: { $ref: "#/components/schemas/ScoreInput" } },
+          }
       responses: { "204": { description: Disputed score resolved } }
 components:
   parameters:
@@ -469,7 +563,8 @@ components:
       required: [status]
     Dashboard:
       type: object
-      required: [leagueName, seasonName, role, nextGame, attentionItems, recentResults]
+      required:
+        [leagueName, seasonName, role, nextGame, attentionItems, recentResults]
       properties:
         leagueName: { type: string }
         seasonName: { type: string }
@@ -601,7 +696,18 @@ components:
         status: { type: string, enum: [ACTIVE, PENDING] }
     Game:
       type: object
-      required: [id, date, startTime, venue, court, homeTeam, awayTeam, status, published]
+      required:
+        [
+          id,
+          date,
+          startTime,
+          venue,
+          court,
+          homeTeam,
+          awayTeam,
+          status,
+          published,
+        ]
       properties:
         id: { type: integer }
         date: { type: string }
@@ -614,7 +720,11 @@ components:
         awayTeamId: { type: integer }
         venueId: { type: integer }
         courtId: { type: integer }
-        status: { type: string, enum: [SCHEDULED, CANCELLED, FINAL, PENDING_CONFIRMATION, DISPUTED] }
+        status:
+          {
+            type: string,
+            enum: [SCHEDULED, CANCELLED, FINAL, PENDING_CONFIRMATION, DISPUTED],
+          }
         published: { type: boolean }
         homeScore: { type: ["integer", "null"] }
         awayScore: { type: ["integer", "null"] }
@@ -636,7 +746,11 @@ components:
         gameId: { type: integer }
         homeScore: { type: integer }
         awayScore: { type: integer }
-        status: { type: string, enum: [NOT_SUBMITTED, PENDING_CONFIRMATION, DISPUTED, FINAL] }
+        status:
+          {
+            type: string,
+            enum: [NOT_SUBMITTED, PENDING_CONFIRMATION, DISPUTED, FINAL],
+          }
     DisputeInput:
       type: object
       required: [reason]
@@ -644,7 +758,17 @@ components:
         reason: { type: string, minLength: 3, maxLength: 1000 }
     Standing:
       type: object
-      required: [rank, teamName, played, wins, losses, pointsFor, pointsAgainst, differential]
+      required:
+        [
+          rank,
+          teamName,
+          played,
+          wins,
+          losses,
+          pointsFor,
+          pointsAgainst,
+          differential,
+        ]
       properties:
         rank: { type: integer }
         teamName: { type: string }

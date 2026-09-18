@@ -4,7 +4,14 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["**/dist/**", "**/generated/**", "**/node_modules/**", "artifacts/mockup-sandbox/**"] },
+  {
+    ignores: [
+      "**/dist/**",
+      "**/generated/**",
+      "**/node_modules/**",
+      "artifacts/mockup-sandbox/**",
+    ],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

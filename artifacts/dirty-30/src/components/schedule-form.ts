@@ -7,7 +7,10 @@ export type EditableScheduleGame = {
   startTime: string;
 };
 
-export function scheduleFormForEdit(game: EditableScheduleGame, toTwentyFourHour: (value: string) => string) {
+export function scheduleFormForEdit(
+  game: EditableScheduleGame,
+  toTwentyFourHour: (value: string) => string,
+) {
   return {
     homeTeamId: String(game.homeTeamId ?? ""),
     awayTeamId: String(game.awayTeamId ?? ""),
