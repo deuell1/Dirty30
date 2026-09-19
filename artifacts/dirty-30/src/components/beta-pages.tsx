@@ -28,6 +28,7 @@ import {
   useGetTeam,
   useGetTeamRoster,
   useListGames,
+  useListTeams,
   useRemoveTeamPlayer,
   useRegenerateInvitation,
   useSetTeamActive,
@@ -39,6 +40,7 @@ import { parsePhoneNumberFromString } from "libphonenumber-js";
 import { Link, useLocation, useParams } from "wouter";
 import { CommissionerScheduleAdmin } from "./commissioner-schedule";
 import { ScoreActions } from "./score-actions";
+import { ScheduleView } from "./schedule-view";
 
 const card =
   "rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5";
@@ -80,7 +82,7 @@ export function DashboardPage() {
   const data = dashboard.data as Dashboard | undefined;
   const commissioner = data?.role === DashboardRole.COMMISSIONER;
   return (
-    <div className="animate-rise">
+    <div className="animate-rise overflow-x-hidden">
       <div className="mb-7 flex items-center gap-2 text-sm text-[hsl(var(--muted-foreground))]">
         <span className="rounded-full bg-[hsl(var(--muted))] px-3 py-1 text-xs font-bold">
           {data?.role ?? "LEAGUE MEMBER"}
@@ -459,31 +461,16 @@ export function TeamDetailPage() {
 export function SchedulePage() {
   const gamesQuery = useListGames();
   const byesQuery = useListTeamByes();
+  const teamsQuery = useListTeams();
   const profile = useGetCurrentUser();
+  const dashboard = useGetDashboard();
+
   const gamesList = (gamesQuery.data ?? []) as Game[];
   const byesList = (byesQuery.data ?? []) as TeamBye[];
-  const commissioner = profile.data?.role === DashboardRole.COMMISSIONER;
+  const teamList = (teamsQuery.data ?? []) as Team[];
+  const dashboardData = dashboard.data as Dashboard | undefined;
 
-  const scheduleItems = [
-    ...gamesList.map((g) => ({
-      type: "game" as const,
-      week: (g as Game & { scheduleWeek?: number | null }).scheduleWeek ?? 999,
-      date: g.date,
-      time: g.startTime,
-      data: g,
-    })),
-    ...byesList.map((b) => ({
-      type: "bye" as const,
-      week: b.scheduleWeek,
-      date: b.playDate,
-      time: "00:00",
-      data: b,
-    })),
-  ].sort((a, b) => {
-    if (a.week !== b.week) return a.week - b.week;
-    if (a.date !== b.date) return a.date.localeCompare(b.date);
-    return a.time.localeCompare(b.time);
-  });
+  const commissioner = profile.data?.role === DashboardRole.COMMISSIONER;
 
   return (
     <div className="animate-rise">
@@ -496,50 +483,29 @@ export function SchedulePage() {
             Schedule
           </h1>
           <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
-            Published games and byes for the league; drafts stay in the
-            commissioner room.
+            Published games and byes for the league.
           </p>
         </div>
       </div>
-      <div className="mt-6 space-y-3">
-        {scheduleItems.length === 0 ? (
-          <p className="text-sm text-[hsl(var(--muted-foreground))]">
-            No schedule items published.
-          </p>
-        ) : (
-          scheduleItems.map((item, index) =>
-            item.type === "game" ? (
-              <GameSummary
-                key={`game-${item.data.id}`}
-                game={item.data as Game}
-              />
-            ) : (
-              <div
-                key={`bye-${(item.data as TeamBye).id}-${index}`}
-                className={`${card} border-dashed border-[hsl(var(--muted-foreground)/.3)] bg-[hsl(var(--muted)/.2)] transition hover:border-[hsl(var(--primary))]`}
-              >
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">
-                    Week {item.week} · {item.date}
-                  </p>
-                  <span className="rounded-full bg-[hsl(var(--muted-foreground)/.15)] px-2 py-1 text-[10px] font-bold text-[hsl(var(--muted-foreground))]">
-                    BYE WEEK
-                  </span>
-                </div>
-                <div className="mt-4 flex flex-col gap-2">
-                  <strong className="min-w-0 break-words font-display text-lg">
-                    {(item.data as TeamBye).teamName}
-                  </strong>
-                  <p className="text-sm text-[hsl(var(--muted-foreground))]">
-                    BYE — No match scheduled this week.
-                  </p>
-                </div>
-              </div>
-            ),
-          )
-        )}
+      <div className="mt-6">
+        <ScheduleView
+          games={gamesList}
+          byes={byesList}
+          teams={teamList}
+          dashboard={dashboardData}
+          commissioner={commissioner}
+        />
       </div>
-      {commissioner && <CommissionerScheduleAdmin />}
+      {commissioner && (
+        <details className="group mt-8">
+          <summary className="flex min-h-[44px] cursor-pointer list-none items-center rounded-[20px] bg-[hsl(var(--primary)/.05)] p-4 font-display text-lg font-bold text-[hsl(var(--primary))] outline-none transition-colors hover:bg-[hsl(var(--primary)/.1)] focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))]">
+            Commissioner Schedule Admin
+          </summary>
+          <div className="mt-4">
+            <CommissionerScheduleAdmin />
+          </div>
+        </details>
+      )}
     </div>
   );
 }

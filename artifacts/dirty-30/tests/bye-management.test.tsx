@@ -16,7 +16,7 @@ vi.mock("@workspace/api-client-react", async () => {
           id: 1,
           teamName: "Team A",
           scheduleWeek: 2,
-          playDate: "2024-06-01",
+          playDate: "2099-06-01",
           source: "MANUAL",
         },
       ],
@@ -48,7 +48,7 @@ vi.mock("@workspace/api-client-react", async () => {
       data: {
         nextBye: {
           scheduleWeek: 2,
-          playDate: "2024-06-01",
+          playDate: "2099-06-01",
           teamName: "Team A",
         },
         role: "COMMISSIONER",
