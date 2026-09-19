@@ -30,6 +30,7 @@ import {
   type Team,
 } from "@workspace/api-client-react";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { bootstrapQueryOptions } from "@/bootstrap-query";
 import { PhoneAuthScreen } from "@/components/phone-auth";
 import { ScoreActions } from "@/components/score-actions";
 import { pendingSurface } from "@/components/invitation-flow";
@@ -340,12 +341,13 @@ function ReviewPersisted() {
 }
 
 export function AuthBoundary() {
-  const { isLoaded, isSignedIn, getToken } = useAuth();
+  const { isLoaded, isSignedIn, userId, getToken } = useAuth();
   const [location, setLocation] = useLocation();
   const profile = useGetCurrentUser({
     query: {
+      ...bootstrapQueryOptions,
       enabled: Boolean(isSignedIn),
-      queryKey: getGetCurrentUserQueryKey(),
+      queryKey: [...getGetCurrentUserQueryKey(), userId],
     },
   });
   const shouldCheckInitialization =
@@ -353,8 +355,9 @@ export function AuthBoundary() {
     profile.data.accessState === "ACTIVE";
   const initialization = useGetLeagueInitializationStatus({
     query: {
+      ...bootstrapQueryOptions,
       enabled: shouldCheckInitialization,
-      queryKey: getGetLeagueInitializationStatusQueryKey(),
+      queryKey: [...getGetLeagueInitializationStatusQueryKey(), userId],
     },
   });
   useEffect(() => {
@@ -380,7 +383,7 @@ export function AuthBoundary() {
       window.sessionStorage.setItem("dirty30-invitation-return", location);
     return <PhoneAuthScreen />;
   }
-  if (profile.isLoading || profile.isFetching)
+  if (profile.isLoading)
     return (
       <div className="grid min-h-[100dvh] place-items-center">
         Checking your league access…
@@ -393,10 +396,7 @@ export function AuthBoundary() {
         retrying={profile.isFetching}
       />
     );
-  if (
-    shouldCheckInitialization &&
-    (initialization.isLoading || initialization.isFetching)
-  )
+  if (shouldCheckInitialization && initialization.isLoading)
     return (
       <div className="grid min-h-[100dvh] place-items-center">
         Checking league setup…
