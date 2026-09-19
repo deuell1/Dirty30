@@ -1,0 +1,85 @@
+Debug the Dirty 30 captain invitation acceptance page.
+
+Current issue:
+
+* Commissioner created a captain invitation.
+* Test captain reaches the "Accept invitation" page.
+* Acceptance does not complete.
+
+Do not modify scheduling features.
+
+Trace only the invitation acceptance flow.
+
+Investigate:
+
+1. Accept Invitation page loading:
+
+* Does the invitation ID/token load correctly?
+* Does the page receive the invite details?
+* Does it show the correct league/team information?
+* Does it enter an infinite loading state?
+* Does it make repeated API calls?
+
+2. Authentication state:
+   Verify:
+
+* Is Clerk session available on the acceptance page?
+* Does the page wait correctly for Clerk loading to complete?
+* Does the authenticated user exist before submitting acceptance?
+* Does the phone-only signup redirect preserve the invitation context?
+
+3. Acceptance API:
+   Identify the exact API endpoint called when clicking Accept.
+
+Verify:
+
+* Request is sent.
+* Authorization token is present.
+* Invitation lookup succeeds.
+* Invitation status is valid.
+* User can be assigned to the invited team.
+* Role is changed to CAPTAIN.
+* Membership record is created.
+* Invitation changes from PENDING to ACCEPTED.
+
+4. Redirect:
+   After successful acceptance:
+   Expected:
+
+* User lands in their team/league view.
+* User has CAPTAIN permissions.
+* No return to Accept Invitation page.
+
+5. Add temporary diagnostic logging (non-sensitive):
+   Log only:
+
+* invitation found true/false
+* authenticated user true/false
+* acceptance mutation started/succeeded/failed
+* redirect completed
+
+Do not log:
+
+* phone numbers
+* emails
+* Clerk IDs
+* tokens
+* secrets
+
+Tests required:
+
+* Existing user accepts captain invite.
+* New user signs up from invite and accepts.
+* Invalid invite displays error.
+* Expired invite displays error.
+* Already accepted invite is handled safely.
+
+Run pnpm verify.
+
+Report:
+
+* exact failure point
+* API endpoint involved
+* database state after failed attempt
+* files changed
+* verification results.

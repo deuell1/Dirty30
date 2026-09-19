@@ -158,6 +158,9 @@ export const playerInvitations = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "restrict" }),
     tokenHash: varchar("token_hash", { length: 128 }).notNull().unique(),
+    intendedRole: membershipRoleEnum("intended_role")
+      .notNull()
+      .default("PLAYER"),
     status: invitationStatusEnum("status").notNull().default("PENDING"),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     acceptedAt: timestamp("accepted_at", { withTimezone: true }),

@@ -173,6 +173,21 @@ export interface InvitationResult {
   token: string;
 }
 
+export type InvitationDetailsMembershipRole = typeof InvitationDetailsMembershipRole[keyof typeof InvitationDetailsMembershipRole];
+
+
+export const InvitationDetailsMembershipRole = {
+  CAPTAIN: 'CAPTAIN',
+  PLAYER: 'PLAYER',
+} as const;
+
+export interface InvitationDetails {
+  teamName: string;
+  leagueName: string;
+  membershipRole: InvitationDetailsMembershipRole;
+  expiresAt: string;
+}
+
 export interface Team {
   id: number;
   name: string;

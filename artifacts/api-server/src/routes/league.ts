@@ -10,6 +10,7 @@ import {
   GetGameParams,
   GetGameResponse,
   GetLeagueInitializationStatusResponse,
+  GetInvitationResponse,
   GetScoreReviewQueueResponse,
   GetStandingsResponse,
   GetTeamParams,
@@ -69,6 +70,11 @@ import {
 import { normalizeUsPhone } from "../lib/phone";
 import { canCommissionerDirectScore } from "../services/scorePolicy";
 import {
+  invitationFailure,
+  invitationIntendedRole,
+} from "../services/invitationPolicy";
+import { acceptInvitationTransaction } from "../services/invitationAcceptance";
+import {
   generateSchedule,
   localDateInTimeZone,
   scheduleGeneratorHash,
@@ -106,6 +112,7 @@ router.use(resolveCurrentUser);
 router.use((req, res, next) => {
   const pendingAllowed =
     (req.method === "GET" && req.path === "/me") ||
+    (req.method === "GET" && /^\/invitations\/[^/]+$/.test(req.path)) ||
     (req.method === "POST" && /^\/invitations\/[^/]+\/accept$/.test(req.path));
   return pendingAllowed ? next() : requireActiveUser(req, res, next);
 });
@@ -1506,6 +1513,21 @@ router.post("/teams/:teamId/invitations", async (req, res, next) => {
             { status: 409 },
           );
         await requireRosterSlot(tx, teamId);
+        const currentCaptain = await tx.query.teamMemberships.findFirst({
+          where: and(
+            eq(teamMemberships.teamId, teamId),
+            eq(teamMemberships.membershipRole, "CAPTAIN"),
+            eq(teamMemberships.active, true),
+          ),
+        });
+        const pendingCaptain = await tx.query.playerInvitations.findFirst({
+          where: and(
+            eq(playerInvitations.teamId, teamId),
+            eq(playerInvitations.intendedRole, "CAPTAIN"),
+            eq(playerInvitations.status, "PENDING"),
+            gt(playerInvitations.expiresAt, new Date()),
+          ),
+        });
         const [created] = await tx
           .insert(playerInvitations)
           .values({
@@ -1513,6 +1535,10 @@ router.post("/teams/:teamId/invitations", async (req, res, next) => {
             invitedPhone,
             invitedByUserId: actor.id,
             tokenHash: createHash("sha256").update(token).digest("hex"),
+            intendedRole: invitationIntendedRole(
+              actor.role,
+              Boolean(currentCaptain || pendingCaptain),
+            ),
             expiresAt: new Date(Date.now() + 7 * 86400000),
           })
           .returning();
@@ -1521,7 +1547,7 @@ router.post("/teams/:teamId/invitations", async (req, res, next) => {
     );
     await audit(actor.id, "invitation", invite.id, "CREATED", undefined, {
       teamId,
-      invitedPhone,
+      intendedRole: invite.intendedRole,
     });
     return res
       .status(201)
@@ -1530,71 +1556,75 @@ router.post("/teams/:teamId/invitations", async (req, res, next) => {
     return next(error);
   }
 });
+router.get("/invitations/:token", async (req, res, next) => {
+  try {
+    const token = z.string().min(20).parse(req.params.token);
+    const tokenHash = createHash("sha256").update(token).digest("hex");
+    const [details] = await db
+      .select({
+        status: playerInvitations.status,
+        expiresAt: playerInvitations.expiresAt,
+        teamId: playerInvitations.teamId,
+        teamName: teams.name,
+        leagueName: leagues.name,
+        intendedRole: playerInvitations.intendedRole,
+      })
+      .from(playerInvitations)
+      .innerJoin(teams, eq(teams.id, playerInvitations.teamId))
+      .innerJoin(seasons, eq(seasons.id, teams.seasonId))
+      .innerJoin(leagues, eq(leagues.id, seasons.leagueId))
+      .innerJoin(users, eq(users.id, playerInvitations.invitedByUserId))
+      .where(eq(playerInvitations.tokenHash, tokenHash))
+      .limit(1);
+    const failure = invitationFailure(details);
+    req.log.info(
+      { invitationFound: Boolean(details) },
+      "invitation lookup completed",
+    );
+    if (failure)
+      return res.status(failure.status).json({ error: failure.message });
+    if (!details)
+      return res.status(410).json({ error: "Invitation is invalid" });
+    return res.json(
+      GetInvitationResponse.parse({
+        teamName: details.teamName,
+        leagueName: details.leagueName,
+        membershipRole: details.intendedRole,
+        expiresAt: details.expiresAt,
+      }),
+    );
+  } catch (error) {
+    return next(error);
+  }
+});
 router.post("/invitations/:token/accept", async (req, res, next) => {
   try {
     const token = z.string().min(20).parse(req.params.token);
     const actor = currentUser(req, res);
+    req.log.info(
+      { authenticatedUser: Boolean(actor), acceptanceMutation: "started" },
+      "invitation acceptance started",
+    );
     const tokenHash = createHash("sha256").update(token).digest("hex");
-    const accepted = await db.transaction(async (tx) => {
-      const invitation = await tx.query.playerInvitations.findFirst({
-        where: eq(playerInvitations.tokenHash, tokenHash),
-      });
-      if (
-        !invitation ||
-        invitation.status !== "PENDING" ||
-        invitation.expiresAt <= new Date()
-      )
-        throw Object.assign(new Error("Invitation is invalid or expired"), {
-          status: 410,
-        });
-      if (invitation.invitedPhone !== actor.phone)
-        throw Object.assign(
-          new Error(
-            "This invitation belongs to a different verified phone number",
-          ),
-          { status: 403 },
-        );
-      return lockRoster(tx, invitation.teamId, async () => {
-        const [updated] = await tx
-          .update(playerInvitations)
-          .set({ status: "ACCEPTED", acceptedAt: new Date() })
-          .where(
-            and(
-              eq(playerInvitations.id, invitation.id),
-              eq(playerInvitations.status, "PENDING"),
-            ),
-          )
-          .returning();
-        if (!updated)
-          throw Object.assign(new Error("Invitation was already accepted"), {
-            status: 409,
-          });
-        await requireRosterSlot(tx, invitation.teamId);
-        const existing = await tx.query.teamMemberships.findFirst({
-          where: and(
-            eq(teamMemberships.teamId, invitation.teamId),
-            eq(teamMemberships.userId, actor.id),
-            eq(teamMemberships.active, true),
-          ),
-        });
-        if (!existing)
-          await tx.insert(teamMemberships).values({
-            teamId: invitation.teamId,
-            userId: actor.id,
-            membershipRole: "PLAYER",
-          });
-        await tx
-          .update(users)
-          .set({ accessState: "ACTIVE", active: true })
-          .where(eq(users.id, actor.id));
-        return updated;
-      });
-    });
-    await audit(actor.id, "invitation", accepted.id, "ACCEPTED", undefined, {
-      userId: actor.id,
-    });
+    const accepted = await acceptInvitationTransaction(
+      tokenHash,
+      actor,
+      (found) =>
+        req.log.info(
+          { invitationFound: found },
+          "invitation acceptance lookup completed",
+        ),
+    );
+    req.log.info(
+      { acceptanceMutation: "succeeded" },
+      "invitation acceptance succeeded",
+    );
     return res.json({ teamId: accepted.teamId });
   } catch (error) {
+    req.log.warn(
+      { acceptanceMutation: "failed" },
+      "invitation acceptance failed",
+    );
     return next(error);
   }
 });

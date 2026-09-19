@@ -5,6 +5,7 @@ import { clerkMiddleware } from "@clerk/express";
 import router from "./routes";
 import healthRouter from "./routes/health";
 import { logger } from "./lib/logger";
+import { sanitizeRequestPath } from "./lib/requestPath";
 
 const app: Express = express();
 const isProduction = process.env.NODE_ENV === "production";
@@ -20,7 +21,7 @@ app.use(
         return {
           id: req.id,
           method: req.method,
-          url: req.url?.split("?")[0],
+          url: sanitizeRequestPath(req.url),
         };
       },
       res(res) {

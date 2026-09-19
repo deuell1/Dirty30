@@ -8,7 +8,7 @@
     "format:check": "prettier --check --ignore-unknown --ignore-path .prettierignore .",
     "lint": "eslint artifacts/api-server/src artifacts/dirty-30/src lib/db/src --quiet",
     "test": "pnpm -r --if-present run test",
-    "test:integration": "node lib/db/scripts/postgres-integration.mjs",
+    "test:integration": "pnpm --filter @workspace/db exec tsx scripts/postgres-integration.mjs",
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
     "verify": "pnpm --filter @workspace/api-spec run codegen && git diff --exit-code -- lib/api-client-react/src/generated lib/api-zod/src/generated && pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run test:integration && pnpm run build"

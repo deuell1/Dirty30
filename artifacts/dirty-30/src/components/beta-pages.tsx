@@ -7,6 +7,7 @@ import {
   getGetCurrentUserQueryKey,
   getGetDashboardQueryKey,
   getGetGameQueryKey,
+  getGetInvitationQueryKey,
   getGetTeamQueryKey,
   getGetTeamRosterQueryKey,
   getListGamesQueryKey,
@@ -24,6 +25,7 @@ import {
   useGetCurrentUser,
   useGetDashboard,
   useGetGame,
+  useGetInvitation,
   useGetStandings,
   useGetTeam,
   useGetTeamRoster,
@@ -667,11 +669,37 @@ export function ProfilePage() {
 export function InvitationPage() {
   const { token } = useParams<{ token: string }>();
   const accept = useAcceptInvitation();
+  const invitation = useGetInvitation(token ?? "", {
+    query: {
+      queryKey: getGetInvitationQueryKey(token ?? ""),
+      enabled: Boolean(token),
+      retry: false,
+      staleTime: Number.POSITIVE_INFINITY,
+    },
+  });
   const client = useQueryClient();
   const [, navigate] = useLocation();
   const profile = useGetCurrentUser();
   const [refreshError, setRefreshError] = useState("");
   const [acceptedTeamId, setAcceptedTeamId] = useState<number | null>(null);
+  useEffect(() => {
+    if (profile.isSuccess)
+      console.info("[invite-diagnostic]", {
+        authenticatedUser: Boolean(profile.data),
+      });
+  }, [profile.data, profile.isSuccess]);
+  useEffect(() => {
+    if (invitation.isSuccess)
+      console.info("[invite-diagnostic]", { invitationFound: true });
+    else if (invitation.isError)
+      console.info("[invite-diagnostic]", { invitationFound: false });
+  }, [invitation.isError, invitation.isSuccess]);
+  useEffect(() => {
+    if (accept.isError)
+      console.info("[invite-diagnostic]", {
+        acceptanceMutation: "failed",
+      });
+  }, [accept.isError]);
   const complete = async (teamId: number) => {
     setRefreshError("");
     const refreshed = await refreshAfterInvitationAcceptance(client, {
@@ -689,20 +717,34 @@ export function InvitationPage() {
       return;
     }
     setAcceptedTeamId(null);
+    console.info("[invite-diagnostic]", { redirectCompleted: true });
     navigate(`/teams/${teamId}`);
   };
   return (
     <div className="mx-auto max-w-xl py-12">
       <section className={`${card} text-center`}>
         <p className="text-xs font-bold uppercase tracking-[.16em] text-[hsl(var(--primary))]">
-          Team invitation
+          {invitation.data?.membershipRole === "CAPTAIN"
+            ? "Captain invitation"
+            : "Team invitation"}
         </p>
         <h1 className="mt-3 font-display text-3xl font-extrabold">
-          Ready to take a roster spot?
+          {invitation.isLoading
+            ? "Checking your invitation…"
+            : invitation.data
+              ? `Join ${invitation.data.teamName}`
+              : "Invitation unavailable"}
         </h1>
         <p className="mt-3 text-sm text-[hsl(var(--muted-foreground))]">
-          Your signed-in verified phone must match the captain’s invitation.
+          {invitation.data
+            ? `${invitation.data.leagueName} · You’ll join as ${invitation.data.membershipRole === "CAPTAIN" ? "team captain" : "a player"}. Your signed-in verified phone must match this invitation.`
+            : "Sign in with the verified phone number that received this invitation."}
         </p>
+        {invitation.error && (
+          <p className="mt-4 rounded-xl bg-[hsl(var(--destructive)/.1)] p-3 text-sm font-semibold text-[hsl(var(--destructive))]">
+            {errorText(invitation.error)}
+          </p>
+        )}
         {accept.error && (
           <p className="mt-4 rounded-xl bg-[hsl(var(--destructive)/.1)] p-3 text-sm font-semibold text-[hsl(var(--destructive))]">
             {errorText(accept.error)}
@@ -729,13 +771,24 @@ export function InvitationPage() {
         ) : (
           <button
             className={`${action} mt-5 min-h-[44px] w-full sm:w-auto`}
-            disabled={accept.isPending}
-            onClick={() =>
-              token &&
+            disabled={
+              invitation.isLoading ||
+              invitation.isError ||
+              !invitation.data ||
+              accept.isPending
+            }
+            onClick={() => {
+              if (!token || !invitation.data) return;
+              console.info("[invite-diagnostic]", {
+                acceptanceMutation: "started",
+              });
               accept.mutate(
                 { token },
                 {
                   onSuccess: (result) => {
+                    console.info("[invite-diagnostic]", {
+                      acceptanceMutation: "succeeded",
+                    });
                     void complete(result.teamId).catch(() => {
                       setAcceptedTeamId(result.teamId);
                       setRefreshError(
@@ -744,8 +797,8 @@ export function InvitationPage() {
                     });
                   },
                 },
-              )
-            }
+              );
+            }}
           >
             {accept.isPending ? "Joining team…" : "Accept invitation"}
           </button>

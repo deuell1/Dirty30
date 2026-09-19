@@ -26,6 +26,8 @@ export * from './game';
 export * from './gameInput';
 export * from './gameStatus';
 export * from './healthStatus';
+export * from './invitationDetails';
+export * from './invitationDetailsMembershipRole';
 export * from './invitationInput';
 export * from './invitationResult';
 export * from './leagueInitializationInput';

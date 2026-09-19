@@ -273,6 +273,17 @@ paths:
                 type: object
                 required: [teamId]
                 properties: { teamId: { type: integer } }
+  /invitations/{token}:
+    get:
+      operationId: getInvitation
+      tags: [teams]
+      parameters: [{ $ref: "#/components/parameters/InvitationToken" }]
+      responses:
+        "200":
+          description: Invitation details
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InvitationDetails" }
   /schedule:
     get:
       operationId: listGames
@@ -806,6 +817,14 @@ components:
         id: { type: integer }
         expiresAt: { type: string, format: date-time }
         token: { type: string }
+    InvitationDetails:
+      type: object
+      required: [teamName, leagueName, membershipRole, expiresAt]
+      properties:
+        teamName: { type: string }
+        leagueName: { type: string }
+        membershipRole: { type: string, enum: [CAPTAIN, PLAYER] }
+        expiresAt: { type: string, format: date-time }
     Team:
       type: object
       required: [id, name, captainName, playerCount, active]

@@ -331,6 +331,18 @@ export const AcceptInvitationResponse = zod.object({
 })
 
 
+export const GetInvitationParams = zod.object({
+  "token": zod.coerce.string()
+})
+
+export const GetInvitationResponse = zod.object({
+  "teamName": zod.string(),
+  "leagueName": zod.string(),
+  "membershipRole": zod.enum(['CAPTAIN', 'PLAYER']),
+  "expiresAt": zod.coerce.date()
+})
+
+
 export const ListGamesQueryParams = zod.object({
   "teamId": zod.coerce.number().int().optional(),
   "date": zod.coerce.string().optional()
