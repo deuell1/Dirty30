@@ -15,3 +15,6 @@ requested creates a race that strands pending users on the waiting screen.
 **How to apply:** Explicitly navigate to the preserved path after activating the
 session, let the authenticated boundary resume it before rendering pending
 access, and retain it across repeated redirects or access-refresh retries.
+If invitation signup reports Clerk's existing-identifier error, switch the
+same phone into Clerk's sign-in flow; do not clear or replace the stored invite
+path during that transition.

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { canResendCode, normalizePhoneForAuth } from "./phone-flow";
+import {
+  canResendCode,
+  isExistingAccountError,
+  normalizePhoneForAuth,
+} from "./phone-flow";
 
 describe("phone OTP interface helpers", () => {
   it("normalizes a US mobile entry to E.164", () => {
@@ -13,6 +17,26 @@ describe("phone OTP interface helpers", () => {
     expect(() => normalizePhoneForAuth("+44 20 7946 0018")).toThrow(
       "valid United States mobile number",
     );
+  });
+
+  it("detects Clerk's existing-account signup response", () => {
+    expect(
+      isExistingAccountError({
+        errors: [
+          {
+            code: "form_identifier_exists",
+            longMessage: "That phone number is already in use.",
+          },
+        ],
+      }),
+    ).toBe(true);
+    expect(
+      isExistingAccountError({
+        errors: [
+          { code: "form_param_format_invalid", message: "Invalid phone" },
+        ],
+      }),
+    ).toBe(false);
   });
 
   it("allows resend only after cooldown and pending work finish", () => {

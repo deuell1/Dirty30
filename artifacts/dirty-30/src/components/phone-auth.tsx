@@ -3,10 +3,23 @@ import { useClerk } from "@clerk/react";
 import { useSignIn, useSignUp } from "@clerk/react/legacy";
 import { ArrowLeft, ArrowRight, RefreshCw, ShieldCheck } from "lucide-react";
 import { useLocation } from "wouter";
-import { normalizePhoneForAuth } from "./phone-flow";
+import { isExistingAccountError, normalizePhoneForAuth } from "./phone-flow";
 
 type Flow = "signIn" | "signUp";
 type Stage = "phone" | "code";
+
+type PhoneSignIn = {
+  create: (params: { identifier: string }) => Promise<{
+    supportedFirstFactors?: Array<{
+      strategy: string;
+      phoneNumberId?: unknown;
+    }> | null;
+  }>;
+  prepareFirstFactor: (params: {
+    strategy: "phone_code";
+    phoneNumberId: string;
+  }) => Promise<unknown>;
+};
 
 function clerkMessage(error: unknown) {
   if (
@@ -21,6 +34,25 @@ function clerkMessage(error: unknown) {
   return "We could not verify that code. Check it and try again.";
 }
 
+export async function preparePhoneSignIn(
+  signIn: PhoneSignIn,
+  normalizedPhone: string,
+) {
+  const attempt = await signIn.create({ identifier: normalizedPhone });
+  const factor = attempt.supportedFirstFactors?.find(
+    (candidate) => candidate.strategy === "phone_code",
+  );
+  if (!factor || typeof factor.phoneNumberId !== "string") {
+    throw new Error(
+      "Phone sign-in is not enabled for this league. Ask the commissioner to enable Clerk phone/SMS authentication.",
+    );
+  }
+  await signIn.prepareFirstFactor({
+    strategy: "phone_code",
+    phoneNumberId: factor.phoneNumberId,
+  });
+}
+
 export function PhoneAuthScreen({ returnTo }: { returnTo?: string | null }) {
   const { isLoaded: signInLoaded, signIn } = useSignIn();
   const { isLoaded: signUpLoaded, signUp } = useSignUp();
@@ -33,6 +65,7 @@ export function PhoneAuthScreen({ returnTo }: { returnTo?: string | null }) {
   const [code, setCode] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
+  const [existingAccount, setExistingAccount] = useState(false);
   const [cooldown, setCooldown] = useState(0);
 
   useEffect(() => {
@@ -51,6 +84,27 @@ export function PhoneAuthScreen({ returnTo }: { returnTo?: string | null }) {
     [canonicalPhone],
   );
 
+  const requestSignInCode = async (normalizedPhone: string) => {
+    if (!signIn) return;
+    await preparePhoneSignIn(signIn, normalizedPhone);
+  };
+
+  const requestCodeForFlow = async (
+    requestedFlow: Flow,
+    normalizedPhone: string,
+  ) => {
+    if (!signUp) return;
+    if (requestedFlow === "signIn") {
+      await requestSignInCode(normalizedPhone);
+    } else {
+      await signUp.create({ phoneNumber: normalizedPhone });
+      await signUp.preparePhoneNumberVerification({ strategy: "phone_code" });
+    }
+    setCanonicalPhone(normalizedPhone);
+    setStage("code");
+    setCooldown(30);
+  };
+
   const requestCode = async (event?: FormEvent) => {
     event?.preventDefault();
     if (!ready || !signIn || !signUp) return;
@@ -58,27 +112,29 @@ export function PhoneAuthScreen({ returnTo }: { returnTo?: string | null }) {
     setError(undefined);
     try {
       const normalizedPhone = normalizePhoneForAuth(phone);
-      if (flow === "signIn") {
-        const attempt = await signIn.create({ identifier: normalizedPhone });
-        const factor = attempt.supportedFirstFactors?.find(
-          (candidate) => candidate.strategy === "phone_code",
-        );
-        if (!factor || !("phoneNumberId" in factor)) {
-          throw new Error(
-            "Phone sign-in is not enabled for this league. Ask the commissioner to enable Clerk phone/SMS authentication.",
-          );
-        }
-        await signIn.prepareFirstFactor({
-          strategy: "phone_code",
-          phoneNumberId: factor.phoneNumberId,
-        });
+      await requestCodeForFlow(flow, normalizedPhone);
+    } catch (caught) {
+      if (flow === "signUp" && isExistingAccountError(caught)) {
+        setExistingAccount(true);
       } else {
-        await signUp.create({ phoneNumber: normalizedPhone });
-        await signUp.preparePhoneNumberVerification({ strategy: "phone_code" });
+        setError(
+          caught instanceof Error ? caught.message : clerkMessage(caught),
+        );
       }
-      setCanonicalPhone(normalizedPhone);
-      setStage("code");
-      setCooldown(30);
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const signInToExistingAccount = async () => {
+    if (!ready || !signIn || !signUp) return;
+    setPending(true);
+    setError(undefined);
+    try {
+      const normalizedPhone = normalizePhoneForAuth(phone);
+      setFlow("signIn");
+      setExistingAccount(false);
+      await requestCodeForFlow("signIn", normalizedPhone);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : clerkMessage(caught));
     } finally {
@@ -150,7 +206,16 @@ export function PhoneAuthScreen({ returnTo }: { returnTo?: string | null }) {
               one-time SMS code.
             </p>
           </div>
-          {stage === "phone" ? (
+          {existingAccount ? (
+            <ExistingAccountNotice
+              pending={pending}
+              onSignIn={() => void signInToExistingAccount()}
+              onCancel={() => {
+                setExistingAccount(false);
+                setError(undefined);
+              }}
+            />
+          ) : stage === "phone" ? (
             <form onSubmit={requestCode} className="space-y-5">
               <label className="block text-sm font-bold">
                 Mobile number
@@ -193,6 +258,7 @@ export function PhoneAuthScreen({ returnTo }: { returnTo?: string | null }) {
                   setFlow((current) =>
                     current === "signIn" ? "signUp" : "signIn",
                   );
+                  setExistingAccount(false);
                   setError(undefined);
                 }}
                 className="w-full text-center text-sm font-bold text-[hsl(var(--primary))] hover:underline"
@@ -279,6 +345,51 @@ export function PhoneAuthScreen({ returnTo }: { returnTo?: string | null }) {
           </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+export function ExistingAccountNotice({
+  pending,
+  onSignIn,
+  onCancel,
+}: {
+  pending: boolean;
+  onSignIn: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div
+      data-testid="existing-account-notice"
+      className="space-y-5 rounded-2xl border border-[hsl(var(--primary)/.22)] bg-[hsl(var(--primary)/.06)] p-5"
+    >
+      <div>
+        <h2 className="font-display text-xl font-extrabold tracking-[-.03em]">
+          Account found
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-[hsl(var(--muted-foreground))]">
+          An account already exists with this phone number. Sign in to continue.
+        </p>
+      </div>
+      <button
+        data-testid="button-sign-in-existing-account"
+        type="button"
+        disabled={pending}
+        onClick={onSignIn}
+        className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 text-sm font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50"
+      >
+        {pending ? "Requesting code…" : "Sign In"}
+        {!pending && <ArrowRight className="h-4 w-4" />}
+      </button>
+      <button
+        data-testid="button-cancel-existing-account"
+        type="button"
+        disabled={pending}
+        onClick={onCancel}
+        className="w-full text-center text-sm font-bold text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] hover:underline disabled:opacity-50"
+      >
+        Cancel
+      </button>
     </div>
   );
 }
