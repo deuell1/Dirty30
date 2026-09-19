@@ -94,42 +94,6 @@ export interface LeagueInitializationResult {
   seasonName: string;
 }
 
-export interface SeedCleanupCounts {
-  seedUsers: number;
-  nonSeedUsers: number;
-  leagues: number;
-  seasons: number;
-  teams: number;
-  memberships: number;
-  games: number;
-  invitations: number;
-  venues: number;
-  courts: number;
-  auditEvents: number;
-  nonSeedMembersOnSeededTeams: number;
-  nonSeedUsersToDelete: number;
-}
-
-export interface SeedCleanupStatus {
-  safeToExecute: boolean;
-  idempotent: boolean;
-  counts: SeedCleanupCounts;
-  discrepancies: string[];
-  blockers: string[];
-  initialization: LeagueInitializationStatus;
-}
-
-export interface SeedCleanupInput {
-  confirmation: string;
-}
-
-export type SeedCleanupResult = SeedCleanupStatus & {
-  complete: boolean;
-  removed: SeedCleanupCounts;
-  preservedNonSeedUsers: number;
-  activeBootstrapCommissioner: boolean;
-};
-
 export type UserProfileRole = typeof UserProfileRole[keyof typeof UserProfileRole];
 
 
