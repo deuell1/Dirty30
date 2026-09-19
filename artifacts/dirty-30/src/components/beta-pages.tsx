@@ -494,15 +494,19 @@ export function SchedulePage() {
           teams={teamList}
           dashboard={dashboardData}
           commissioner={commissioner}
+          scheduleLoaded={!gamesQuery.isLoading && !byesQuery.isLoading}
         />
       </div>
       {commissioner && (
-        <details className="group mt-8">
+        <details
+          id="commissioner-schedule-tools"
+          className="group mt-8 scroll-mt-4"
+        >
           <summary className="flex min-h-[44px] cursor-pointer list-none items-center rounded-[20px] bg-[hsl(var(--primary)/.05)] p-4 font-display text-lg font-bold text-[hsl(var(--primary))] outline-none transition-colors hover:bg-[hsl(var(--primary)/.1)] focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))]">
-            Commissioner Schedule Admin
+            Commissioner Tools: Generator, BYEs & Venues
           </summary>
           <div className="mt-4">
-            <CommissionerScheduleAdmin />
+            <CommissionerScheduleAdmin includeGameManagement={false} />
           </div>
         </details>
       )}

@@ -44,7 +44,11 @@ const fieldClass =
 const subtleButton =
   "min-h-10 rounded-lg border border-[hsl(var(--border))] px-3 text-xs font-bold hover:border-[hsl(var(--primary))]";
 
-export function CommissionerScheduleAdmin() {
+export function CommissionerScheduleAdmin({
+  includeGameManagement = true,
+}: {
+  includeGameManagement?: boolean;
+}) {
   const client = useQueryClient();
   const venues = useListVenues();
   const teams = useListTeams();
@@ -257,7 +261,9 @@ export function CommissionerScheduleAdmin() {
           Commissioner tools
         </p>
         <h2 className="mt-1 font-display text-2xl font-bold">
-          Build the game board
+          {includeGameManagement
+            ? "Build the game board"
+            : "Generator, BYEs & venues"}
         </h2>
         <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">
           Draft games stay visible only to commissioners until published.
@@ -501,153 +507,157 @@ export function CommissionerScheduleAdmin() {
             </div>
           )}
         </section>
-        <section className="rounded-2xl bg-[hsl(var(--card))] p-4">
-          <div className="flex items-center justify-between">
-            <h3 className="font-display text-lg font-bold">
-              {editingGame ? "Edit game" : "Create draft game"}
-            </h3>
-            {editingGame && (
+        {includeGameManagement && (
+          <section className="rounded-2xl bg-[hsl(var(--card))] p-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-display text-lg font-bold">
+                {editingGame ? "Edit game" : "Create draft game"}
+              </h3>
+              {editingGame && (
+                <button
+                  type="button"
+                  onClick={clearGame}
+                  className="text-xs font-bold text-[hsl(var(--primary))]"
+                >
+                  New draft
+                </button>
+              )}
+            </div>
+            <form onSubmit={saveGame} className="mt-3 grid gap-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Select
+                  label="Home team"
+                  value={form.homeTeamId}
+                  onChange={(value) =>
+                    setForm((current) => ({ ...current, homeTeamId: value }))
+                  }
+                  options={teamList
+                    .filter((team) => team.active)
+                    .map((team) => [team.id, team.name])}
+                />
+                <Select
+                  label="Away team"
+                  value={form.awayTeamId}
+                  onChange={(value) =>
+                    setForm((current) => ({ ...current, awayTeamId: value }))
+                  }
+                  options={teamList
+                    .filter((team) => team.active)
+                    .map((team) => [team.id, team.name])}
+                />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Select
+                  label="Venue"
+                  value={form.venueId}
+                  onChange={(value) =>
+                    setForm((current) => ({
+                      ...current,
+                      venueId: value,
+                      courtId: "",
+                    }))
+                  }
+                  options={activeVenues.map((venue) => [venue.id, venue.name])}
+                />
+                <Select
+                  label="Court"
+                  value={form.courtId}
+                  onChange={(value) =>
+                    setForm((current) => ({ ...current, courtId: value }))
+                  }
+                  options={activeCourts.map((court) => [court.id, court.name])}
+                />
+              </div>
+              <label className="text-xs font-bold">
+                Date & start time
+                <input
+                  type="datetime-local"
+                  value={form.scheduledAt}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      scheduledAt: event.target.value,
+                    }))
+                  }
+                  className={`${fieldClass} min-h-[44px]`}
+                />
+              </label>
               <button
-                type="button"
-                onClick={clearGame}
-                className="text-xs font-bold text-[hsl(var(--primary))]"
+                className={`${subtleButton} min-h-[44px] w-full sm:w-auto mt-2`}
+                type="submit"
+                disabled={createGame.isPending || updateGame.isPending}
               >
-                New draft
+                {editingGame ? "Save game" : "Save draft"}
               </button>
-            )}
-          </div>
-          <form onSubmit={saveGame} className="mt-3 grid gap-3">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Select
-                label="Home team"
-                value={form.homeTeamId}
-                onChange={(value) =>
-                  setForm((current) => ({ ...current, homeTeamId: value }))
-                }
-                options={teamList
-                  .filter((team) => team.active)
-                  .map((team) => [team.id, team.name])}
-              />
-              <Select
-                label="Away team"
-                value={form.awayTeamId}
-                onChange={(value) =>
-                  setForm((current) => ({ ...current, awayTeamId: value }))
-                }
-                options={teamList
-                  .filter((team) => team.active)
-                  .map((team) => [team.id, team.name])}
-              />
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Select
-                label="Venue"
-                value={form.venueId}
-                onChange={(value) =>
-                  setForm((current) => ({
-                    ...current,
-                    venueId: value,
-                    courtId: "",
-                  }))
-                }
-                options={activeVenues.map((venue) => [venue.id, venue.name])}
-              />
-              <Select
-                label="Court"
-                value={form.courtId}
-                onChange={(value) =>
-                  setForm((current) => ({ ...current, courtId: value }))
-                }
-                options={activeCourts.map((court) => [court.id, court.name])}
-              />
-            </div>
-            <label className="text-xs font-bold">
-              Date & start time
-              <input
-                type="datetime-local"
-                value={form.scheduledAt}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    scheduledAt: event.target.value,
-                  }))
-                }
-                className={`${fieldClass} min-h-[44px]`}
-              />
-            </label>
-            <button
-              className={`${subtleButton} min-h-[44px] w-full sm:w-auto mt-2`}
-              type="submit"
-              disabled={createGame.isPending || updateGame.isPending}
-            >
-              {editingGame ? "Save game" : "Save draft"}
-            </button>
-          </form>
-        </section>
+            </form>
+          </section>
+        )}
       </div>
       <ScheduleGenerator />
       <ByeWeekAdmin />
-      <div className="space-y-3">
-        <h3 className="font-display text-lg font-bold">
-          Commissioner schedule
-        </h3>
-        {gameList.map((game) => (
-          <div
-            key={game.id}
-            className="flex flex-col gap-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 text-sm sm:flex-row sm:flex-wrap sm:items-center sm:gap-2 sm:p-3"
-          >
-            <div className="min-w-0 flex-1">
-              <p className="break-words font-bold">
-                {game.homeTeam} vs {game.awayTeam}
-              </p>
-              <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                {game.date} · {game.startTime} · {game.venue} / {game.court}
-              </p>
-            </div>
-            <span className="self-start rounded-full bg-[hsl(var(--muted))] px-2 py-1 text-[10px] font-bold sm:self-auto">
-              {!game.published ? "DRAFT" : game.status.replaceAll("_", " ")}
-            </span>
-            <div className="flex w-full gap-2 sm:w-auto">
-              <button
-                type="button"
-                onClick={() => startEdit(game)}
-                className={`${subtleButton} min-h-[44px] flex-1 sm:min-h-10 sm:flex-none`}
-              >
-                Edit
-              </button>
-              {!game.published && (
+      {includeGameManagement && (
+        <div className="space-y-3">
+          <h3 className="font-display text-lg font-bold">
+            Commissioner schedule
+          </h3>
+          {gameList.map((game) => (
+            <div
+              key={game.id}
+              className="flex flex-col gap-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 text-sm sm:flex-row sm:flex-wrap sm:items-center sm:gap-2 sm:p-3"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="break-words font-bold">
+                  {game.homeTeam} vs {game.awayTeam}
+                </p>
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                  {game.date} · {game.startTime} · {game.venue} / {game.court}
+                </p>
+              </div>
+              <span className="self-start rounded-full bg-[hsl(var(--muted))] px-2 py-1 text-[10px] font-bold sm:self-auto">
+                {!game.published ? "DRAFT" : game.status.replaceAll("_", " ")}
+              </span>
+              <div className="flex w-full gap-2 sm:w-auto">
                 <button
                   type="button"
-                  onClick={() =>
-                    publishGame.mutate(
-                      { gameId: game.id },
-                      { onSuccess: refreshSchedule },
-                    )
-                  }
+                  onClick={() => startEdit(game)}
                   className={`${subtleButton} min-h-[44px] flex-1 sm:min-h-10 sm:flex-none`}
                 >
-                  Publish
+                  Edit
                 </button>
-              )}
-              {game.status !== GameStatus.FINAL &&
-                game.status !== GameStatus.CANCELLED && (
+                {!game.published && (
                   <button
                     type="button"
                     onClick={() =>
-                      cancelGame.mutate(
+                      publishGame.mutate(
                         { gameId: game.id },
                         { onSuccess: refreshSchedule },
                       )
                     }
                     className={`${subtleButton} min-h-[44px] flex-1 sm:min-h-10 sm:flex-none`}
                   >
-                    Cancel
+                    Publish
                   </button>
                 )}
+                {game.status !== GameStatus.FINAL &&
+                  game.status !== GameStatus.CANCELLED && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        cancelGame.mutate(
+                          { gameId: game.id },
+                          { onSuccess: refreshSchedule },
+                        )
+                      }
+                      className={`${subtleButton} min-h-[44px] flex-1 sm:min-h-10 sm:flex-none`}
+                    >
+                      Cancel
+                    </button>
+                  )}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

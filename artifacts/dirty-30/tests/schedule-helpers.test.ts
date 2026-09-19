@@ -1,225 +1,140 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
+import type { Dashboard, Game, TeamBye } from "@workspace/api-client-react";
 import {
+  buildScheduleWeeks,
+  filterByDate,
+  filterByMode,
+  filterByTeam,
   inferUserTeamId,
   mergeScheduleData,
-  filterBySegment,
-  filterByTeam,
-  groupScheduleItems,
-  ScheduleItem,
+  selectCurrentScheduleWeek,
+  startOfCalendarWeek,
+  type ScheduleMode,
 } from "../src/components/schedule-helpers";
-import type { Game, TeamBye } from "@workspace/api-client-react";
 
-describe("Schedule Helpers", () => {
-  it("infers user team id accurately", () => {
+const game = (values: Partial<Game>): Game =>
+  ({
+    id: 1,
+    scheduleWeek: 1,
+    date: "2026-09-12",
+    startTime: "18:00",
+    status: "SCHEDULED",
+    published: true,
+    homeTeamId: 1,
+    awayTeamId: 2,
+    ...values,
+  }) as Game;
+
+const bye = (values: Partial<TeamBye>): TeamBye =>
+  ({
+    id: 1,
+    scheduleWeek: 1,
+    playDate: "2026-09-12",
+    teamId: 3,
+    teamName: "Bye Team",
+    source: "GENERATED",
+    ...values,
+  }) as TeamBye;
+
+describe("schedule week helpers", () => {
+  it("uses only the membership-scoped bye signal for My Team", () => {
     expect(inferUserTeamId(undefined)).toBeUndefined();
-
-    // Commissioner
     expect(
       inferUserTeamId({
-        role: "COMMISSIONER",
-        attentionItems: [],
-        leagueName: "",
-        seasonName: "",
-        nextGame: null,
+        role: "PLAYER",
+        nextBye: { teamId: 9 } as TeamBye,
+      } as Dashboard),
+    ).toBe(9);
+    expect(
+      inferUserTeamId({
+        role: "PLAYER",
         nextBye: null,
-        recentResults: [],
-      }),
+        nextGame: { homeTeamId: 1, awayTeamId: 2 },
+        recentResults: [{ homeTeamId: 1, awayTeamId: 2 }],
+      } as Dashboard),
     ).toBeUndefined();
+  });
 
-    // From Next Bye
-    expect(
-      inferUserTeamId({
-        role: "PLAYER",
-        attentionItems: [],
-        leagueName: "",
-        seasonName: "",
-        nextGame: null,
-        nextBye: { teamId: 99 } as any,
-        recentResults: [],
-      }),
-    ).toBe(99);
-
-    // League-wide game history must never be mistaken for membership.
-    expect(
-      inferUserTeamId({
-        role: "PLAYER",
-        attentionItems: [],
-        leagueName: "",
-        seasonName: "",
-        nextGame: { homeTeamId: 1, awayTeamId: 2 } as any,
-        nextBye: null,
-        recentResults: [
-          { homeTeamId: 2, awayTeamId: 3 } as any,
-          { homeTeamId: 4, awayTeamId: 2 } as any,
+  it("groups persisted schedule weeks across multiple dates", () => {
+    const groups = buildScheduleWeeks(
+      mergeScheduleData(
+        [
+          game({ id: 1, scheduleWeek: 4, date: "2026-10-02" }),
+          game({ id: 2, scheduleWeek: 4, date: "2026-10-04" }),
         ],
-      }),
-    ).toBeUndefined();
+        [bye({ id: 3, scheduleWeek: 4, playDate: "2026-10-03" })],
+      ),
+    );
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({
+      key: "week:4",
+      label: "Week 4",
+      startDate: "2026-10-02",
+      endDate: "2026-10-04",
+      dates: ["2026-10-02", "2026-10-03", "2026-10-04"],
+    });
+    expect(groups[0].items.map((item) => item.data.id)).toEqual([1, 3, 2]);
   });
 
-  it("merges games and byes, handling null week and sorting", () => {
-    const games: Game[] = [
-      {
-        id: 1,
-        scheduleWeek: null,
-        date: "2024-10-01",
-        startTime: "10:00",
-      } as any,
-      { id: 2, scheduleWeek: 1, date: "2024-09-01", startTime: "11:00" } as any,
+  it("derives deterministic calendar groups for legacy games without mutation", () => {
+    const legacyGames = [
+      game({ id: 1, scheduleWeek: null, date: "2026-09-15" }),
+      game({ id: 2, scheduleWeek: null, date: "2026-09-20" }),
+      game({ id: 3, scheduleWeek: null, date: "2026-09-21" }),
     ];
-    const byes: TeamBye[] = [
-      { id: 1, scheduleWeek: 1, playDate: "2024-09-01" } as any,
-    ];
-
-    const merged = mergeScheduleData(games, byes);
-    expect(merged.length).toBe(3);
-    // Sort order: date -> week -> time
-    expect(merged[0].week).toBe(1);
-    expect(merged[0].type).toBe("bye"); // byes have time "00:00", game has "11:00"
-    expect(merged[1].type).toBe("game");
-    expect(merged[1].data.id).toBe(2);
-    expect(merged[2].week).toBe(999);
+    const before = structuredClone(legacyGames);
+    const groups = buildScheduleWeeks(mergeScheduleData(legacyGames, []));
+    expect(startOfCalendarWeek("2026-09-15")).toBe("2026-09-14");
+    expect(groups.map((group) => group.key)).toEqual([
+      "legacy:2026-09-14",
+      "legacy:2026-09-21",
+    ]);
+    expect(legacyGames).toEqual(before);
   });
 
-  it("filters by segment correctly (Upcoming, All, Completed)", () => {
-    const items: ScheduleItem[] = [
-      {
-        type: "game",
-        week: 1,
-        date: "2024-09-20",
-        time: "10:00",
-        data: { status: "SCHEDULED" } as any,
-      }, // Upcoming
-      {
-        type: "game",
-        week: 1,
-        date: "2024-09-15",
-        time: "10:00",
-        data: { status: "SCHEDULED" } as any,
-      }, // Upcoming today
-      {
-        type: "game",
-        week: 2,
-        date: "2024-09-21",
-        time: "10:00",
-        data: { status: "FINAL" } as any,
-      }, // Completed
-      {
-        type: "bye",
-        week: 1,
-        date: "2024-08-01",
-        time: "00:00",
-        data: {} as any,
-      }, // Completed (past date)
-      {
-        type: "bye",
-        week: 2,
-        date: "2024-10-01",
-        time: "00:00",
-        data: {} as any,
-      }, // Upcoming (future date)
-      {
-        type: "game",
-        week: 1,
-        date: "2024-09-01",
-        time: "10:00",
-        data: { status: "SCHEDULED" } as any,
-      }, // Completed (past date, even if SCHEDULED)
-    ];
-
-    const todayStr = "2024-09-15";
-
-    const all = filterBySegment(items, "All", todayStr);
-    expect(all.length).toBe(6);
-
-    const upcoming = filterBySegment(items, "Upcoming", todayStr);
-    expect(upcoming.length).toBe(3);
-    expect(
-      upcoming.some((i) => i.type === "game" && i.data.status === "SCHEDULED"),
-    ).toBe(true);
-    expect(
-      upcoming.some((i) => i.type === "bye" && i.date === "2024-10-01"),
-    ).toBe(true);
-    expect(upcoming.some((i) => i.date === "2024-09-15")).toBe(true);
-
-    const completed = filterBySegment(items, "Completed", todayStr);
-    expect(completed.length).toBe(3);
+  it("selects the containing league week or nearest upcoming week", () => {
+    const groups = buildScheduleWeeks(
+      mergeScheduleData(
+        [
+          game({ id: 1, scheduleWeek: 1, date: "2026-09-12" }),
+          game({ id: 2, scheduleWeek: 2, date: "2026-09-26" }),
+          game({ id: 3, scheduleWeek: 3, date: "2026-10-10" }),
+        ],
+        [],
+      ),
+    );
+    expect(selectCurrentScheduleWeek(groups, "2026-09-12")).toBe("week:1");
+    expect(selectCurrentScheduleWeek(groups, "2026-09-19")).toBe("week:2");
+    expect(selectCurrentScheduleWeek(groups, "2026-12-01")).toBe("week:3");
   });
 
-  it("retains drafts in filter (drafts have status SCHEDULED)", () => {
-    const items: ScheduleItem[] = [
-      {
-        type: "game",
-        week: 1,
-        date: "2024-10-01",
-        time: "10:00",
-        data: { status: "SCHEDULED", published: false } as any,
-      },
-    ];
-    const upcoming = filterBySegment(items, "Upcoming", "2024-09-01");
-    expect(upcoming.length).toBe(1); // Draft is retained
-  });
-
-  it("filters by team, including byes", () => {
-    const items: ScheduleItem[] = [
-      {
-        type: "game",
-        week: 1,
-        date: "2024-09-01",
-        time: "10:00",
-        data: { homeTeamId: 1, awayTeamId: 2 } as any,
-      },
-      {
-        type: "bye",
-        week: 2,
-        date: "2024-09-02",
-        time: "00:00",
-        data: { teamId: 1 } as any,
-      },
-    ];
-
-    expect(filterByTeam(items, 1).length).toBe(2);
-    expect(filterByTeam(items, 2).length).toBe(1);
-    expect(filterByTeam(items, "all").length).toBe(2);
-  });
-
-  it("groups schedule items properly", () => {
-    const items: ScheduleItem[] = [
-      {
-        type: "game",
-        week: 1,
-        date: "2024-09-01",
-        time: "10:00",
-        data: { id: 1 } as any,
-      },
-      {
-        type: "bye",
-        week: 1,
-        date: "2024-09-01",
-        time: "00:00",
-        data: { id: 1 } as any,
-      },
-      {
-        type: "game",
-        week: 2,
-        date: "2024-09-08",
-        time: "10:00",
-        data: { id: 2 } as any,
-      },
-    ];
-
-    const grouped = groupScheduleItems(items, "2024-09-05");
-
-    expect(grouped.length).toBe(2);
-
-    // First group
-    expect(grouped[0].week).toBe(1);
-    expect(grouped[0].rawDate).toBe("2024-09-01");
-    expect(grouped[0].items.length).toBe(2);
-    expect(grouped[0].isHistorical).toBe(true); // < 2024-09-05
-
-    // Second group
-    expect(grouped[1].week).toBe(2);
-    expect(grouped[1].rawDate).toBe("2024-09-08");
-    expect(grouped[1].isHistorical).toBe(false);
+  it("applies team and date filters in every schedule mode", () => {
+    const items = mergeScheduleData(
+      [
+        game({ id: 1, date: "2026-09-18", homeTeamId: 1, awayTeamId: 2 }),
+        game({
+          id: 2,
+          date: "2026-09-20",
+          homeTeamId: 2,
+          awayTeamId: 3,
+          status: "FINAL",
+        }),
+      ],
+      [bye({ id: 3, playDate: "2026-09-18", teamId: 1 })],
+    );
+    const modes: ScheduleMode[] = ["Week", "Upcoming", "Completed", "All"];
+    for (const mode of modes) {
+      const modeItems = filterByMode(items, mode, "2026-09-19");
+      const combined = filterByDate(filterByTeam(modeItems, 1), "2026-09-18");
+      if (mode === "Completed") expect(combined).toHaveLength(2);
+      else if (mode === "Upcoming") expect(combined).toHaveLength(0);
+      else expect(combined.map((item) => item.data.id)).toEqual([3, 1]);
+    }
+    expect(filterByTeam(items, 1).some((item) => item.type === "bye")).toBe(
+      true,
+    );
+    expect(filterByTeam(items, 2).some((item) => item.type === "bye")).toBe(
+      false,
+    );
   });
 });
