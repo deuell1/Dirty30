@@ -10,6 +10,8 @@ const app: Express = express();
 const isProduction = process.env.NODE_ENV === "production";
 const productionOrigin = process.env.APP_ORIGIN;
 
+app.disable("etag");
+
 app.use(
   pinoHttp({
     logger,
@@ -36,6 +38,12 @@ app.use(
 );
 app.use("/api", healthRouter);
 app.use(clerkMiddleware());
+app.use("/api", (req, res, next) => {
+  delete req.headers["if-none-match"];
+  delete req.headers["if-modified-since"];
+  res.setHeader("Cache-Control", "private, no-store");
+  next();
+});
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
