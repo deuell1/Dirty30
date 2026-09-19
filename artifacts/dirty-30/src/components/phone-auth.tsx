@@ -8,6 +8,14 @@ import { isExistingAccountError, normalizePhoneForAuth } from "./phone-flow";
 type Flow = "signIn" | "signUp";
 type Stage = "phone" | "code";
 
+type SetActive = (params: { session: string }) => Promise<unknown>;
+
+export function authFlowToggleLabel(flow: Flow) {
+  return flow === "signIn"
+    ? "New to Dirty-30? Sign Up"
+    : "Already have an account? Sign in";
+}
+
 type PhoneSignIn = {
   create: (params: { identifier: string }) => Promise<{
     supportedFirstFactors?: Array<{
@@ -51,6 +59,16 @@ export async function preparePhoneSignIn(
     strategy: "phone_code",
     phoneNumberId: factor.phoneNumberId,
   });
+}
+
+export async function completePhoneAuthentication(
+  setActive: SetActive,
+  sessionId: string,
+  returnTo: string | null | undefined,
+  navigate: (path: string) => void,
+) {
+  await setActive({ session: sessionId });
+  if (returnTo) navigate(returnTo);
 }
 
 export function PhoneAuthScreen({ returnTo }: { returnTo?: string | null }) {
@@ -160,8 +178,12 @@ export function PhoneAuthScreen({ returnTo }: { returnTo?: string | null }) {
           "Phone verification needs more information. Complete any required Clerk profile fields, then try again.",
         );
       }
-      await setActive({ session: attempt.createdSessionId });
-      if (returnTo) navigate(returnTo);
+      await completePhoneAuthentication(
+        setActive,
+        attempt.createdSessionId,
+        returnTo,
+        navigate,
+      );
     } catch (caught) {
       setError(clerkMessage(caught));
     } finally {
@@ -170,7 +192,7 @@ export function PhoneAuthScreen({ returnTo }: { returnTo?: string | null }) {
   };
 
   return (
-    <div className="noise flex min-h-[100dvh] items-center justify-center bg-[hsl(var(--sidebar))] p-5 text-[hsl(var(--sidebar-foreground))]">
+    <div className="noise flex min-h-[100dvh] items-start justify-center overflow-y-auto bg-[hsl(var(--sidebar))] p-3 text-[hsl(var(--sidebar-foreground))] sm:items-center sm:p-5">
       <div className="grid w-full max-w-4xl overflow-hidden rounded-[28px] bg-[hsl(var(--card))] text-[hsl(var(--foreground))] shadow-[0_24px_80px_hsl(var(--sidebar)/.45)] md:grid-cols-[.9fr_1.1fr]">
         <div className="relative hidden overflow-hidden bg-[hsl(var(--primary))] p-10 text-[hsl(var(--primary-foreground))] md:block">
           <p className="font-display text-2xl font-extrabold tracking-[-.05em]">
@@ -193,19 +215,13 @@ export function PhoneAuthScreen({ returnTo }: { returnTo?: string | null }) {
             </p>
           </div>
         </div>
-        <div className="p-7 sm:p-12">
-          <div className="mb-10">
-            <p className="font-mono-custom text-[10px] font-bold uppercase tracking-[.2em] text-[hsl(var(--primary))]">
-              Verified phone access
-            </p>
-            <h1 className="mt-3 font-display text-4xl font-extrabold tracking-[-.06em]">
-              {heading}
-            </h1>
-            <p className="mt-3 text-sm leading-6 text-[hsl(var(--muted-foreground))]">
-              Use your United States mobile number. We’ll ask Clerk to send a
-              one-time SMS code.
-            </p>
-          </div>
+        <div
+          className={
+            existingAccount
+              ? "flex min-h-0 items-start p-4 sm:p-8 md:items-center"
+              : "p-5 sm:p-12"
+          }
+        >
           {existingAccount ? (
             <ExistingAccountNotice
               pending={pending}
@@ -215,134 +231,150 @@ export function PhoneAuthScreen({ returnTo }: { returnTo?: string | null }) {
                 setError(undefined);
               }}
             />
-          ) : stage === "phone" ? (
-            <form onSubmit={requestCode} className="space-y-5">
-              <label className="block text-sm font-bold">
-                Mobile number
-                <input
-                  data-testid="input-auth-phone"
-                  autoComplete="tel"
-                  inputMode="tel"
-                  value={phone}
-                  onChange={(event) => setPhone(event.target.value)}
-                  placeholder="(312) 555-0123"
-                  className="mt-2 min-h-12 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 outline-none focus:border-[hsl(var(--primary))]"
-                />
-              </label>
-              {error && (
-                <p
-                  data-testid="text-auth-error"
-                  className="rounded-xl border border-[hsl(var(--destructive)/.3)] bg-[hsl(var(--destructive)/.08)] p-3 text-sm text-[hsl(var(--destructive))]"
-                >
-                  {error}
-                </p>
-              )}
-              <button
-                data-testid="button-send-phone-code"
-                type="submit"
-                disabled={!phone.trim() || pending || !ready}
-                className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 text-sm font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50"
-              >
-                {pending ? (
-                  "Requesting code…"
-                ) : (
-                  <>
-                    Continue with SMS <ArrowRight className="h-4 w-4" />
-                  </>
-                )}
-              </button>
-              <button
-                data-testid="button-toggle-auth-flow"
-                type="button"
-                onClick={() => {
-                  setFlow((current) =>
-                    current === "signIn" ? "signUp" : "signIn",
-                  );
-                  setExistingAccount(false);
-                  setError(undefined);
-                }}
-                className="w-full text-center text-sm font-bold text-[hsl(var(--primary))] hover:underline"
-              >
-                {flow === "signIn"
-                  ? "New to Dirty-30? Join with your phone"
-                  : "Already have an account? Sign in"}
-              </button>
-            </form>
           ) : (
-            <form onSubmit={verifyCode} className="space-y-5">
-              <div className="rounded-2xl bg-[hsl(var(--muted)/.65)] p-4">
-                <p className="text-sm font-bold">Code sent to {codeLabel}</p>
-                <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
-                  Enter the SMS code from Clerk. It expires quickly for your
-                  security.
+            <div className="w-full">
+              <div className="mb-8 sm:mb-10">
+                <p className="font-mono-custom text-[10px] font-bold uppercase tracking-[.2em] text-[hsl(var(--primary))]">
+                  Verified phone access
+                </p>
+                <h1 className="mt-3 font-display text-4xl font-extrabold tracking-[-.06em]">
+                  {heading}
+                </h1>
+                <p className="mt-3 text-sm leading-6 text-[hsl(var(--muted-foreground))]">
+                  Use your United States mobile number. We’ll ask Clerk to send
+                  a one-time SMS code.
                 </p>
               </div>
-              <label className="block text-sm font-bold">
-                One-time code
-                <input
-                  data-testid="input-auth-code"
-                  autoComplete="one-time-code"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  value={code}
-                  onChange={(event) =>
-                    setCode(event.target.value.replace(/\D/g, ""))
-                  }
-                  className="mt-2 min-h-12 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 font-mono-custom text-xl tracking-[.35em] outline-none focus:border-[hsl(var(--primary))]"
-                />
-              </label>
-              {error && (
-                <p
-                  data-testid="text-auth-error"
-                  className="rounded-xl border border-[hsl(var(--destructive)/.3)] bg-[hsl(var(--destructive)/.08)] p-3 text-sm text-[hsl(var(--destructive))]"
-                >
-                  {error}
-                </p>
+              {stage === "phone" ? (
+                <form onSubmit={requestCode} className="space-y-5">
+                  <label className="block text-sm font-bold">
+                    Mobile number
+                    <input
+                      data-testid="input-auth-phone"
+                      autoComplete="tel"
+                      inputMode="tel"
+                      value={phone}
+                      onChange={(event) => setPhone(event.target.value)}
+                      placeholder="(312) 555-0123"
+                      className="mt-2 min-h-12 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 outline-none focus:border-[hsl(var(--primary))]"
+                    />
+                  </label>
+                  {error && (
+                    <p
+                      data-testid="text-auth-error"
+                      className="rounded-xl border border-[hsl(var(--destructive)/.3)] bg-[hsl(var(--destructive)/.08)] p-3 text-sm text-[hsl(var(--destructive))]"
+                    >
+                      {error}
+                    </p>
+                  )}
+                  <button
+                    data-testid="button-send-phone-code"
+                    type="submit"
+                    disabled={!phone.trim() || pending || !ready}
+                    className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 text-sm font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50"
+                  >
+                    {pending ? (
+                      "Requesting code…"
+                    ) : (
+                      <>
+                        Continue with SMS <ArrowRight className="h-4 w-4" />
+                      </>
+                    )}
+                  </button>
+                  <button
+                    data-testid="button-toggle-auth-flow"
+                    type="button"
+                    onClick={() => {
+                      setFlow((current) =>
+                        current === "signIn" ? "signUp" : "signIn",
+                      );
+                      setExistingAccount(false);
+                      setError(undefined);
+                    }}
+                    className="w-full text-center text-sm font-bold text-[hsl(var(--primary))] hover:underline"
+                  >
+                    {authFlowToggleLabel(flow)}
+                  </button>
+                </form>
+              ) : (
+                <form onSubmit={verifyCode} className="space-y-5">
+                  <div className="rounded-2xl bg-[hsl(var(--muted)/.65)] p-4">
+                    <p className="text-sm font-bold">
+                      Code sent to {codeLabel}
+                    </p>
+                    <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
+                      Enter the SMS code from Clerk. It expires quickly for your
+                      security.
+                    </p>
+                  </div>
+                  <label className="block text-sm font-bold">
+                    One-time code
+                    <input
+                      data-testid="input-auth-code"
+                      autoComplete="one-time-code"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={code}
+                      onChange={(event) =>
+                        setCode(event.target.value.replace(/\D/g, ""))
+                      }
+                      className="mt-2 min-h-12 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 font-mono-custom text-xl tracking-[.35em] outline-none focus:border-[hsl(var(--primary))]"
+                    />
+                  </label>
+                  {error && (
+                    <p
+                      data-testid="text-auth-error"
+                      className="rounded-xl border border-[hsl(var(--destructive)/.3)] bg-[hsl(var(--destructive)/.08)] p-3 text-sm text-[hsl(var(--destructive))]"
+                    >
+                      {error}
+                    </p>
+                  )}
+                  <button
+                    data-testid="button-verify-phone-code"
+                    type="submit"
+                    disabled={code.length < 4 || pending}
+                    className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 text-sm font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50"
+                  >
+                    {pending ? (
+                      "Checking code…"
+                    ) : (
+                      <>
+                        <ShieldCheck className="h-4 w-4" /> Verify & enter
+                      </>
+                    )}
+                  </button>
+                  <div className="flex items-center justify-between gap-3">
+                    <button
+                      data-testid="button-back-to-phone"
+                      type="button"
+                      onClick={() => {
+                        setStage("phone");
+                        setCode("");
+                        setError(undefined);
+                      }}
+                      className="inline-flex items-center gap-1 text-xs font-bold text-[hsl(var(--muted-foreground))]"
+                    >
+                      <ArrowLeft className="h-3.5 w-3.5" /> Change number
+                    </button>
+                    <button
+                      data-testid="button-resend-phone-code"
+                      type="button"
+                      disabled={cooldown > 0 || pending}
+                      onClick={() => void requestCode()}
+                      className="inline-flex items-center gap-1 text-xs font-bold text-[hsl(var(--primary))] disabled:opacity-50"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />{" "}
+                      {cooldown ? `Resend in ${cooldown}s` : "Resend code"}
+                    </button>
+                  </div>
+                </form>
               )}
-              <button
-                data-testid="button-verify-phone-code"
-                type="submit"
-                disabled={code.length < 4 || pending}
-                className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 text-sm font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50"
-              >
-                {pending ? (
-                  "Checking code…"
-                ) : (
-                  <>
-                    <ShieldCheck className="h-4 w-4" /> Verify & enter
-                  </>
-                )}
-              </button>
-              <div className="flex items-center justify-between gap-3">
-                <button
-                  data-testid="button-back-to-phone"
-                  type="button"
-                  onClick={() => {
-                    setStage("phone");
-                    setCode("");
-                    setError(undefined);
-                  }}
-                  className="inline-flex items-center gap-1 text-xs font-bold text-[hsl(var(--muted-foreground))]"
-                >
-                  <ArrowLeft className="h-3.5 w-3.5" /> Change number
-                </button>
-                <button
-                  data-testid="button-resend-phone-code"
-                  type="button"
-                  disabled={cooldown > 0 || pending}
-                  onClick={() => void requestCode()}
-                  className="inline-flex items-center gap-1 text-xs font-bold text-[hsl(var(--primary))] disabled:opacity-50"
-                >
-                  <RefreshCw className="h-3.5 w-3.5" />{" "}
-                  {cooldown ? `Resend in ${cooldown}s` : "Resend code"}
-                </button>
-              </div>
-            </form>
+              <p className="mt-8 text-center text-xs text-[hsl(var(--muted-foreground))]">
+                Dirty-30 uses Clerk SMS verification. No password or email
+                sign-in is available.
+              </p>
+            </div>
           )}
-          <p className="mt-8 text-center text-xs text-[hsl(var(--muted-foreground))]">
-            Dirty-30 uses Clerk SMS verification. No password or email sign-in
-            is available.
-          </p>
         </div>
       </div>
     </div>
@@ -361,14 +393,14 @@ export function ExistingAccountNotice({
   return (
     <div
       data-testid="existing-account-notice"
-      className="space-y-5 rounded-2xl border border-[hsl(var(--primary)/.22)] bg-[hsl(var(--primary)/.06)] p-5"
+      className="w-full space-y-4 rounded-2xl border border-[hsl(var(--primary)/.22)] bg-[hsl(var(--primary)/.06)] p-4 sm:space-y-5 sm:p-6"
     >
       <div>
         <h2 className="font-display text-xl font-extrabold tracking-[-.03em]">
           Account found
         </h2>
         <p className="mt-2 text-sm leading-6 text-[hsl(var(--muted-foreground))]">
-          An account already exists with this phone number. Sign in to continue.
+          An account already exists with this phone number.
         </p>
       </div>
       <button
@@ -386,9 +418,9 @@ export function ExistingAccountNotice({
         type="button"
         disabled={pending}
         onClick={onCancel}
-        className="w-full text-center text-sm font-bold text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] hover:underline disabled:opacity-50"
+        className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-[hsl(var(--border))] px-4 text-center text-sm font-bold text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--background))] hover:text-[hsl(var(--foreground))] disabled:opacity-50"
       >
-        Cancel
+        Cancel / Return
       </button>
     </div>
   );

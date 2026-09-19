@@ -1,0 +1,16 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "qTyA99raaNJl7FCyJjV5D"
+uri = "file://screenshots/invite-existing-account-viewports.jpg"
+type = "image"
+title = "Invitation existing-account viewport validation"
+description = "Dirty-30 existing-account recovery UI validated at 360, 390, 430, 768, and 1280px. Both actions remain visible above the fold with no clipping or horizontal overflow."
+logical_id = "bf7b21cd-05e8-43ba-be5a-a38bb0f62cff"
+content_hash = "sha256:b0bdc063df0eff73dd87b994bb30dee5943cf3aa9666c27d4139ae8b94996467"
+size = 35358
+mtime_ms = 1789860779420
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:79f49f4e-ea3c-45da-8fce-c0b4301437a7/bf7b21cd-05e8-43ba-be5a-a38bb0f62cff/d42c6cf2-39a2-4ab9-b704-3ee4cdfe44f8"
+storage_version_token = "1789860783897127"
+content_type = "image/jpeg"
