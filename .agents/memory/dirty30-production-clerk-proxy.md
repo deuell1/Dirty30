@@ -1,10 +1,10 @@
 ---
-name: Dirty-30 production Clerk proxy
-description: Production Clerk wiring required for the published Dirty-30 app to finish loading.
+name: Dirty-30 external Clerk routing
+description: Production routing rule for the user-owned Clerk tenant and custom domain.
 ---
 
-Use Replit's canonical host-aware Clerk publishable-key resolution on both the web client and API server, and always pass the injected Clerk proxy URL to the web provider.
+Use the external production publishable key directly in the web provider and standard Clerk backend middleware. Do not add a same-origin `/api/__clerk` proxy or derive a key from the request host.
 
-**Why:** The direct-key configuration can work in development while the published app remains stuck waiting for Clerk to load. Replit-managed production authentication depends on the same-origin proxy and host-derived key.
+**Why:** The project moved to a user-owned Clerk production tenant whose key encodes `clerk.dirty30volleyball.com`. The former Replit-oriented proxy caused Clerk bootstrap requests to fail with `host_invalid`.
 
-**How to apply:** When changing Clerk setup or upgrading its SDK, compare both client and server wiring against the current Replit Clerk guidance. Do not omit or hardcode the production proxy.
+**How to apply:** Keep normal server-side session verification, but let ClerkJS contact the Frontend API encoded in the production key. A non-production preview needs a separate Clerk development key; do not restore host rewriting or the retired proxy.

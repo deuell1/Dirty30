@@ -1,0 +1,72 @@
+Fix the Dirty 30 production Clerk integration for the new user-owned Clerk application and custom domain.
+
+Current verified production state:
+
+* Application domain: https://dirty30volleyball.com
+* Clerk Production primary domain is activated.
+* Clerk frontend/auth domain is clerk.dirty30volleyball.com.
+* The published frontend is using the correct current production pk_live publishable key.
+* /api/healthz returns 200.
+* /api/readyz returns 200.
+* CORS correctly accepts https://dirty30volleyball.com.
+* Clerk bootstrap still fails with 400 host_invalid.
+* Deployment logs confirm the frontend is still routing Clerk bootstrap traffic through the legacy Replit-specific /api/__clerk proxy.
+
+Goal:
+Remove only the obsolete Replit-managed Clerk proxy integration and allow the Clerk SDK to communicate directly with the external user-owned Clerk Production instance.
+
+Requirements:
+
+1. Remove the production /api/__clerk proxy route and Replit-managed Clerk proxy middleware.
+
+2. Remove imports, constants, middleware registrations, and dependencies that exist only to support that Replit Clerk proxy.
+
+3. Do NOT remove the normal Clerk backend authentication middleware used by the API to verify sessions.
+
+4. Keep the existing external Clerk environment variables:
+
+   * VITE_CLERK_PUBLISHABLE_KEY
+   * CLERK_PUBLISHABLE_KEY
+   * CLERK_SECRET_KEY
+
+5. Do not hard-code Clerk URLs.
+
+6. Allow the Clerk frontend SDK to use the Frontend API/domain encoded in the production publishable key.
+
+7. Preserve:
+
+   * phone-only authentication
+   * verified-phone requirement
+   * bootstrap commissioner logic
+   * ACTIVE/PENDING authorization
+   * invitation flow
+   * league initialization flow
+   * roster, schedule, score, and standings functionality
+
+8. Do not modify:
+
+   * production database records
+   * Clerk secrets
+   * DNS
+   * league data
+   * migrations
+
+9. Add or update tests proving:
+
+   * no /api/__clerk proxy is required
+   * normal Clerk-authenticated API requests still work
+   * unauthenticated protected API requests still return 401
+   * existing authorization tests remain green
+
+10. Run the complete pnpm verify pipeline.
+
+11. Build the production frontend and confirm there is no remaining reference to the legacy /api/__clerk proxy.
+
+Report:
+
+* legacy proxy code removed
+* Clerk backend middleware preserved
+* tests passed
+* pnpm verify result
+* production build result
+* whether the app is ready to republish for direct Clerk authentication
