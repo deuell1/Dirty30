@@ -12,6 +12,7 @@ tags:
   - name: schedule
   - name: standings
   - name: scores
+  - name: maintenance
 paths:
   /healthz:
     get:
@@ -68,6 +69,37 @@ paths:
                 $ref: "#/components/schemas/LeagueInitializationResult"
         "409":
           description: An active league and season already exist
+  /maintenance/seed-cleanup:
+    get:
+      operationId: getSeedCleanupStatus
+      tags: [maintenance]
+      summary: Preview removal of the original development seed dataset
+      responses:
+        "200":
+          description: Seed cleanup dry run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SeedCleanupStatus"
+    post:
+      operationId: executeSeedCleanup
+      tags: [maintenance]
+      summary: Permanently remove the original development seed dataset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SeedCleanupInput"
+      responses:
+        "200":
+          description: Cleanup result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SeedCleanupResult"
+        "409":
+          description: Cleanup is unsafe or already complete
   /me:
     get:
       operationId: getCurrentUser
@@ -635,6 +667,82 @@ components:
         seasonId: { type: integer }
         leagueName: { type: string }
         seasonName: { type: string }
+    SeedCleanupCounts:
+      type: object
+      required:
+        [
+          seedUsers,
+          nonSeedUsers,
+          leagues,
+          seasons,
+          teams,
+          memberships,
+          games,
+          invitations,
+          venues,
+          courts,
+          auditEvents,
+          nonSeedMembersOnSeededTeams,
+          nonSeedUsersToDelete,
+        ]
+      properties:
+        seedUsers: { type: integer }
+        nonSeedUsers: { type: integer }
+        leagues: { type: integer }
+        seasons: { type: integer }
+        teams: { type: integer }
+        memberships: { type: integer }
+        games: { type: integer }
+        invitations: { type: integer }
+        venues: { type: integer }
+        courts: { type: integer }
+        auditEvents: { type: integer }
+        nonSeedMembersOnSeededTeams: { type: integer }
+        nonSeedUsersToDelete: { type: integer }
+    SeedCleanupStatus:
+      type: object
+      required:
+        [
+          safeToExecute,
+          idempotent,
+          counts,
+          discrepancies,
+          blockers,
+          initialization,
+        ]
+      properties:
+        safeToExecute: { type: boolean }
+        idempotent: { type: boolean }
+        counts: { $ref: "#/components/schemas/SeedCleanupCounts" }
+        discrepancies:
+          type: array
+          items: { type: string }
+        blockers:
+          type: array
+          items: { type: string }
+        initialization:
+          $ref: "#/components/schemas/LeagueInitializationStatus"
+    SeedCleanupInput:
+      type: object
+      required: [confirmation]
+      properties:
+        confirmation: { type: string }
+    SeedCleanupResult:
+      allOf:
+        - $ref: "#/components/schemas/SeedCleanupStatus"
+        - type: object
+          required:
+            [
+              complete,
+              removed,
+              preservedNonSeedUsers,
+              activeBootstrapCommissioner,
+            ]
+          properties:
+            complete: { type: boolean }
+            removed: { $ref: "#/components/schemas/SeedCleanupCounts" }
+            preservedNonSeedUsers: { type: integer }
+            activeBootstrapCommissioner: { type: boolean }
     UserProfile:
       type: object
       required: [id, firstName, lastName, phone, role, accessState]

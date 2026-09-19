@@ -106,6 +106,93 @@ export const InitializeLeagueResponse = zod.object({
 })
 
 
+/**
+ * @summary Preview removal of the original development seed dataset
+ */
+export const GetSeedCleanupStatusResponse = zod.object({
+  "safeToExecute": zod.boolean(),
+  "idempotent": zod.boolean(),
+  "counts": zod.object({
+  "seedUsers": zod.int(),
+  "nonSeedUsers": zod.int(),
+  "leagues": zod.int(),
+  "seasons": zod.int(),
+  "teams": zod.int(),
+  "memberships": zod.int(),
+  "games": zod.int(),
+  "invitations": zod.int(),
+  "venues": zod.int(),
+  "courts": zod.int(),
+  "auditEvents": zod.int(),
+  "nonSeedMembersOnSeededTeams": zod.int(),
+  "nonSeedUsersToDelete": zod.int()
+}),
+  "discrepancies": zod.array(zod.string()),
+  "blockers": zod.array(zod.string()),
+  "initialization": zod.object({
+  "requiresInitialization": zod.boolean(),
+  "hasActiveLeague": zod.boolean(),
+  "hasActiveSeason": zod.boolean(),
+  "leagueName": zod.string().nullish()
+})
+})
+
+
+/**
+ * @summary Permanently remove the original development seed dataset
+ */
+export const ExecuteSeedCleanupBody = zod.object({
+  "confirmation": zod.string()
+})
+
+export const ExecuteSeedCleanupResponse = zod.object({
+  "safeToExecute": zod.boolean(),
+  "idempotent": zod.boolean(),
+  "counts": zod.object({
+  "seedUsers": zod.int(),
+  "nonSeedUsers": zod.int(),
+  "leagues": zod.int(),
+  "seasons": zod.int(),
+  "teams": zod.int(),
+  "memberships": zod.int(),
+  "games": zod.int(),
+  "invitations": zod.int(),
+  "venues": zod.int(),
+  "courts": zod.int(),
+  "auditEvents": zod.int(),
+  "nonSeedMembersOnSeededTeams": zod.int(),
+  "nonSeedUsersToDelete": zod.int()
+}),
+  "discrepancies": zod.array(zod.string()),
+  "blockers": zod.array(zod.string()),
+  "initialization": zod.object({
+  "requiresInitialization": zod.boolean(),
+  "hasActiveLeague": zod.boolean(),
+  "hasActiveSeason": zod.boolean(),
+  "leagueName": zod.string().nullish()
+})
+}).and(zod.object({
+  "complete": zod.boolean(),
+  "removed": zod.object({
+  "seedUsers": zod.int(),
+  "nonSeedUsers": zod.int(),
+  "leagues": zod.int(),
+  "seasons": zod.int(),
+  "teams": zod.int(),
+  "memberships": zod.int(),
+  "games": zod.int(),
+  "invitations": zod.int(),
+  "venues": zod.int(),
+  "courts": zod.int(),
+  "auditEvents": zod.int(),
+  "nonSeedMembersOnSeededTeams": zod.int(),
+  "nonSeedUsersToDelete": zod.int()
+}),
+  "preservedNonSeedUsers": zod.int(),
+  "activeBootstrapCommissioner": zod.boolean()
+}))
+
+
 export const getCurrentUserResponsePhoneRegExp = new RegExp('^\\+[1-9]\\d{1,14}$');
 
 

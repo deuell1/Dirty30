@@ -48,6 +48,7 @@ import {
   SchedulePage,
   TeamDetailPage,
 } from "@/components/beta-pages";
+import { SeedCleanupPage } from "@/components/seed-cleanup";
 import NotFound from "@/pages/not-found";
 import {
   Link,
@@ -504,6 +505,7 @@ function Router() {
           <Route path="/standings" component={Standings} />
           <Route path="/review" component={ReviewPersisted} />
           <Route path="/settings" component={ProfilePage} />
+          <Route path="/maintenance/seed-cleanup" component={SeedCleanupPage} />
           <Route component={NotFound} />
         </Switch>
       </ErrorBoundary>

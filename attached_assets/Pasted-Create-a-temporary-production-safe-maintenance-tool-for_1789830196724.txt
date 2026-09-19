@@ -1,0 +1,182 @@
+Create a temporary, production-safe maintenance tool for removing the original Dirty 30 development seed dataset.
+
+This is NOT a permanent product feature. It will be removed immediately after successful cleanup.
+
+Current known production seed dataset:
+
+* League: Dirty 30 Beer League
+* Season: Summer 2026
+* Teams:
+
+  * Hops & Dreams
+  * Pitch Please
+  * Ale Stars
+  * The Keg Stands
+* Venue: Lakeside Sports Center
+* Courts: Court 1 and Court 2
+* Seed users: users whose externalAuthId begins with seed_
+* Expected seed users: 15
+* Expected teams: 4
+* Expected games: 10
+* Expected team memberships: 14
+* Expected pending invitations: 1
+* Expected venue: 1
+* Expected courts: 2
+
+Important:
+There are now real Clerk-authenticated production users. Every non-seed user account must be preserved.
+
+Build a temporary route:
+
+/maintenance/seed-cleanup
+
+ACCESS CONTROL
+
+The route must require:
+
+1. Authenticated Clerk session
+2. accessState === ACTIVE
+3. role === COMMISSIONER
+4. The authenticated user's normalized verified phone must match BOOTSTRAP_COMMISSIONER_PHONE
+
+Do not allow any other commissioner to execute this maintenance action.
+
+DRY RUN
+
+When the page first loads, perform a read-only dry run.
+
+Display counts for:
+
+* seed users
+* non-seed users
+* seeded leagues
+* seeded seasons
+* seeded teams
+* seeded memberships
+* games associated with the seeded season
+* invitations associated with seeded teams
+* venues associated with the seeded league
+* courts associated with those venues
+* audit events associated with the seeded league
+
+Also report:
+
+* number of non-seed users who have memberships on seeded teams
+* number of non-seed users who would be deleted
+
+The number of non-seed users that would be deleted MUST always be 0.
+
+EXECUTION SAFETY
+
+Do not allow execution if:
+
+* the seeded league cannot be uniquely identified
+* the seeded season cannot be uniquely identified
+* seed user identification is ambiguous
+* any deletion query would delete a non-seed user
+* any unexpected foreign-key relationship would prevent safe cleanup
+* the dry-run counts materially differ from the known seed dataset without clearly explaining why
+
+If non-seed users have memberships on seeded teams, report them by count only and STOP instead of deleting anything.
+
+Do not expose:
+
+* phone numbers
+* emails
+* Clerk IDs
+* auth IDs
+* tokens
+* database credentials
+* secrets
+
+EXECUTION UI
+
+Require the bootstrap commissioner to type exactly:
+
+DELETE DIRTY30 SEED DATA
+
+before enabling the destructive button.
+
+Label the button clearly:
+
+Permanently Remove Demo Data
+
+The page must clearly state that real Clerk user accounts will be preserved.
+
+DATABASE TRANSACTION
+
+Perform the cleanup inside one PostgreSQL transaction.
+
+Delete seed/demo records in dependency-safe order, including:
+
+* audit events associated with the seeded league
+* seeded invitations
+* seeded games
+* memberships on seeded teams
+* seeded courts
+* seeded venue
+* seeded teams
+* seeded season
+* seeded league
+* users whose externalAuthId explicitly begins with seed_
+
+Never delete a user whose externalAuthId does not begin with seed_.
+
+If any part fails, roll back the entire transaction.
+
+POST-CLEANUP VERIFICATION
+
+Before committing, verify:
+
+* seeded league count = 0
+* seeded season count = 0
+* seeded team count = 0
+* seeded game count = 0
+* seeded invitation count = 0
+* seeded venue count = 0
+* seeded court count = 0
+* seed user count = 0
+* all non-seed production users still exist
+
+After successful commit, display:
+
+* Seed Cleanup Complete
+* counts removed by entity type
+* number of non-seed users preserved
+* whether an ACTIVE bootstrap commissioner remains
+
+The page should then verify that league initialization would now report:
+
+* requiresInitialization: true
+* hasActiveLeague: false
+* hasActiveSeason: false
+
+Do not automatically create a new league or season.
+
+TESTING
+
+Add tests for:
+
+* unauthorized user rejected
+* pending user rejected
+* normal commissioner who is not the bootstrap commissioner rejected
+* bootstrap commissioner can perform dry run
+* dry run performs no mutations
+* execution preserves non-seed users
+* execution removes seed dataset
+* transaction rolls back on failure
+* duplicate execution safely reports nothing remaining rather than causing corruption
+
+Run the full pnpm verify pipeline.
+
+Do not modify Clerk settings, DNS, production secrets, migrations, or unrelated application functionality.
+
+Report:
+
+* implementation status
+* dry-run logic
+* safety checks
+* authorization tests
+* database tests
+* pnpm verify result
+* whether it is safe to publish the temporary maintenance tool
