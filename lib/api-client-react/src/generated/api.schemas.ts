@@ -78,12 +78,27 @@ export interface TeamBye {
   source: TeamByeSource;
 }
 
+export type DashboardTeamMembershipRole = typeof DashboardTeamMembershipRole[keyof typeof DashboardTeamMembershipRole];
+
+
+export const DashboardTeamMembershipRole = {
+  CAPTAIN: 'CAPTAIN',
+  PLAYER: 'PLAYER',
+} as const;
+
+export interface DashboardTeam {
+  teamId: number;
+  teamName: string;
+  membershipRole: DashboardTeamMembershipRole;
+}
+
 export interface Dashboard {
   leagueName: string;
   seasonName: string;
   role: DashboardRole;
   nextGame: Game | null;
   nextBye: TeamBye | null;
+  myTeams: DashboardTeam[];
   attentionItems: string[];
   recentResults: Game[];
 }

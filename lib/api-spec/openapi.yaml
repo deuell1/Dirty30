@@ -735,6 +735,7 @@ components:
           role,
           nextGame,
           nextBye,
+          myTeams,
           attentionItems,
           recentResults,
         ]
@@ -750,6 +751,10 @@ components:
           anyOf:
             - $ref: "#/components/schemas/TeamBye"
             - type: "null"
+        myTeams:
+          type: array
+          items:
+            $ref: "#/components/schemas/DashboardTeam"
         attentionItems:
           type: array
           items: { type: string }
@@ -757,6 +762,13 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Game"
+    DashboardTeam:
+      type: object
+      required: [teamId, teamName, membershipRole]
+      properties:
+        teamId: { type: integer }
+        teamName: { type: string }
+        membershipRole: { type: string, enum: [CAPTAIN, PLAYER] }
     LeagueInitializationStatus:
       type: object
       required: [requiresInitialization, hasActiveLeague, hasActiveSeason]

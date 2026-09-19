@@ -59,6 +59,11 @@ export const GetDashboardResponse = zod.object({
   "playDate": zod.string().regex(getDashboardResponseNextByeOnePlayDateRegExp),
   "source": zod.enum(['GENERATED', 'RECONCILED', 'MANUAL'])
 }),zod.null()]),
+  "myTeams": zod.array(zod.object({
+  "teamId": zod.int(),
+  "teamName": zod.string(),
+  "membershipRole": zod.enum(['CAPTAIN', 'PLAYER'])
+})),
   "attentionItems": zod.array(zod.string()),
   "recentResults": zod.array(zod.object({
   "id": zod.int(),

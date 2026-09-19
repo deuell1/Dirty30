@@ -27,6 +27,19 @@ function errorMessage(error: unknown) {
   return "The score change could not be saved.";
 }
 
+export function scoreWorkflowAction(
+  game: Pick<Game, "status" | "canManageScore">,
+  correctionConfirmed: boolean,
+) {
+  if (game.status === GameStatus.DISPUTED) return "resolve" as const;
+  if (game.canManageScore) {
+    if (game.status === GameStatus.FINAL && !correctionConfirmed)
+      return "confirm-correction" as const;
+    return "correct" as const;
+  }
+  return "submit" as const;
+}
+
 export function ScoreActions({ game }: { game: Game }) {
   const client = useQueryClient();
   const submit = useSubmitScore();
@@ -60,16 +73,15 @@ export function ScoreActions({ game }: { game: Game }) {
   const save = (event: FormEvent) => {
     event.preventDefault();
     if (!ready) return;
-    if (game.status === GameStatus.DISPUTED) {
+    const action = scoreWorkflowAction(game, confirmCorrection);
+    if (action === "resolve") {
       resolve.mutate(
         { gameId: game.id, data: scoreInput },
         { onSuccess: refresh },
       );
-    } else if (game.canManageScore) {
-      if (game.status === GameStatus.FINAL && !confirmCorrection) {
-        setConfirmCorrection(true);
-        return;
-      }
+    } else if (action === "confirm-correction") {
+      setConfirmCorrection(true);
+    } else if (action === "correct") {
       correct.mutate(
         { gameId: game.id, data: scoreInput },
         { onSuccess: refresh },
@@ -168,6 +180,7 @@ export function ScoreActions({ game }: { game: Game }) {
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             <button
               type="button"
+              data-testid="action-confirm-score"
               onClick={() =>
                 confirm.mutate({ gameId: game.id }, { onSuccess: refresh })
               }
@@ -177,6 +190,7 @@ export function ScoreActions({ game }: { game: Game }) {
             </button>
             <button
               type="button"
+              data-testid="action-dispute-score"
               disabled={reason.trim().length < 3}
               onClick={() =>
                 dispute.mutate(
@@ -217,6 +231,7 @@ export function ScoreActions({ game }: { game: Game }) {
           )}
           <button
             type="submit"
+            data-testid="action-save-score"
             disabled={!ready}
             className="mt-5 min-h-[44px] w-full rounded-xl bg-[hsl(var(--primary))] px-4 text-sm font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50"
           >
@@ -260,6 +275,7 @@ function ScoreField({
     <label className="text-xs font-bold">
       <span className="block min-w-0 truncate">{label}</span>
       <input
+        data-testid={`input-score-${label.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}`}
         type="number"
         min="0"
         inputMode="numeric"

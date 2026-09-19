@@ -245,7 +245,10 @@ export function ScheduleGenerator() {
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   return (
-    <section className="rounded-2xl bg-[hsl(var(--card))] p-4 sm:p-5 border border-[hsl(var(--border))] mt-5">
+    <section
+      id="schedule-generator"
+      className="mt-5 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 sm:p-5"
+    >
       <h3 className="font-display text-xl font-bold mb-1">Generate schedule</h3>
       <p className="text-sm text-[hsl(var(--muted-foreground))] mb-5 leading-relaxed">
         Generate unpublished drafts for {teams.length} active teams:{" "}

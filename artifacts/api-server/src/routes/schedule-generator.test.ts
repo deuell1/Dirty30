@@ -472,7 +472,15 @@ describe("schedule generator routes", () => {
 
   it("shows only the viewer team's bye and hides generated drafts until published", async () => {
     state.role = "PLAYER";
-    state.membershipRows = [{ userId: 41, teamId: 1, active: true }];
+    state.membershipRows = [
+      {
+        userId: 41,
+        teamId: 1,
+        teamName: "Team 1",
+        membershipRole: "PLAYER",
+        active: true,
+      },
+    ];
     state.byeRows = [
       {
         id: 1,
@@ -494,6 +502,13 @@ describe("schedule generator routes", () => {
     const hidden = await request(app).get("/dashboard");
     expect(hidden.status).toBe(200);
     expect(hidden.body.nextBye).toBeNull();
+    expect(hidden.body.myTeams).toEqual([
+      {
+        teamId: 1,
+        teamName: "Team 1",
+        membershipRole: "PLAYER",
+      },
+    ]);
     state.gameRows.push({
       id: 301,
       homeTeamId: 2,

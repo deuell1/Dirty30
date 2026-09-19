@@ -91,11 +91,45 @@ describe("ScheduleView", () => {
       />,
     );
     expect(commissionerHtml).toContain("Commissioner week tools");
-    expect(commissionerHtml).toContain("Add game");
-    expect(commissionerHtml).toContain("Generator &amp; byes");
+    expect(commissionerHtml).toContain("Add Game");
+    expect(commissionerHtml).toContain("Generate Schedule");
+    expect(commissionerHtml).toContain("Edit Schedule");
+    expect(commissionerHtml).toContain("Manage Byes");
     expect(commissionerHtml).toContain("Edit");
     expect(playerHtml).not.toContain("Commissioner week tools");
     expect(playerHtml).not.toContain(">Edit<");
+  });
+
+  it("shows stable My Team filters from active memberships", () => {
+    const html = renderToString(
+      <ScheduleView
+        games={games}
+        byes={[]}
+        teams={teams}
+        commissioner={false}
+        dashboard={
+          {
+            role: "PLAYER",
+            myTeams: [
+              {
+                teamId: 1,
+                teamName: "Team A",
+                membershipRole: "PLAYER",
+              },
+              {
+                teamId: 2,
+                teamName: "Team B",
+                membershipRole: "CAPTAIN",
+              },
+            ],
+          } as never
+        }
+      />,
+    );
+
+    expect(html).toContain("My Team (Team A)");
+    expect(html).toContain("My Team (Team B)");
+    expect(html).toContain("All Games");
   });
 
   it("keeps finalized scheduling fields locked while scheduled games remain editable", () => {
@@ -121,11 +155,11 @@ describe("ScheduleView", () => {
   it("reports commissioner status counts for the selected week", () => {
     const group = buildScheduleWeeks(mergeScheduleData(games, []))[0];
     expect(statusCounts(group)).toEqual({
-      draft: 1,
-      published: 0,
-      pending: 0,
-      disputed: 0,
-      final: 0,
+      totalGames: 1,
+      completedGames: 0,
+      pendingScores: 0,
+      scheduledGames: 1,
+      byeTeams: 0,
     });
   });
 

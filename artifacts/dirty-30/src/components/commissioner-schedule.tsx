@@ -40,9 +40,9 @@ function message(error: unknown) {
 }
 
 const fieldClass =
-  "mt-1 min-h-11 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm outline-none focus:border-[hsl(var(--primary))]";
+  "mt-1 min-h-[44px] w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm outline-none focus:border-[hsl(var(--primary))]";
 const subtleButton =
-  "min-h-10 rounded-lg border border-[hsl(var(--border))] px-3 text-xs font-bold hover:border-[hsl(var(--primary))]";
+  "min-h-[44px] flex items-center justify-center rounded-lg border border-[hsl(var(--border))] px-3 text-xs font-bold hover:border-[hsl(var(--primary))] transition-colors";
 
 export function CommissionerScheduleAdmin({
   includeGameManagement = true,
@@ -376,7 +376,7 @@ export function CommissionerScheduleAdmin({
                             address: venue.address ?? "",
                           })
                         }
-                        className={`${subtleButton} min-h-[44px] flex-1 sm:flex-none sm:min-h-10`}
+                        className={`${subtleButton} min-h-[44px] flex-1 sm:flex-none`}
                       >
                         Edit
                       </button>
@@ -391,7 +391,7 @@ export function CommissionerScheduleAdmin({
                             { onSuccess: refreshSchedule },
                           )
                         }
-                        className={`${subtleButton} min-h-[44px] flex-1 sm:flex-none sm:min-h-10`}
+                        className={`${subtleButton} min-h-[44px] flex-1 sm:flex-none`}
                       >
                         {venue.active ? "Deactivate" : "Activate"}
                       </button>
@@ -620,7 +620,7 @@ export function CommissionerScheduleAdmin({
                 <button
                   type="button"
                   onClick={() => startEdit(game)}
-                  className={`${subtleButton} min-h-[44px] flex-1 sm:min-h-10 sm:flex-none`}
+                  className={`${subtleButton} min-h-[44px] flex-1 sm:flex-none`}
                 >
                   Edit
                 </button>
@@ -633,7 +633,7 @@ export function CommissionerScheduleAdmin({
                         { onSuccess: refreshSchedule },
                       )
                     }
-                    className={`${subtleButton} min-h-[44px] flex-1 sm:min-h-10 sm:flex-none`}
+                    className={`${subtleButton} min-h-[44px] flex-1 sm:flex-none`}
                   >
                     Publish
                   </button>
@@ -648,7 +648,7 @@ export function CommissionerScheduleAdmin({
                           { onSuccess: refreshSchedule },
                         )
                       }
-                      className={`${subtleButton} min-h-[44px] flex-1 sm:min-h-10 sm:flex-none`}
+                      className={`${subtleButton} min-h-[44px] flex-1 sm:flex-none`}
                     >
                       Cancel
                     </button>

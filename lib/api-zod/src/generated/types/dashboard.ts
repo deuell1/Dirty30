@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DashboardRole } from './dashboardRole';
+import type { DashboardTeam } from './dashboardTeam';
 import type { Game } from './game';
 import type { TeamBye } from './teamBye';
 
@@ -15,6 +16,7 @@ export interface Dashboard {
   role: DashboardRole;
   nextGame: Game | null;
   nextBye: TeamBye | null;
+  myTeams: DashboardTeam[];
   attentionItems: string[];
   recentResults: Game[];
 }

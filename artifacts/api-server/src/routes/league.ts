@@ -1137,20 +1137,27 @@ router.get("/dashboard", async (_req, res, next) => {
     ]);
     const nextGame =
       allGames.find((game) => game.status === "SCHEDULED") ?? null;
-    const viewerTeamIds =
+    const viewerTeams =
       user.role === "COMMISSIONER"
         ? []
-        : (
-            await db
-              .select({ teamId: teamMemberships.teamId })
-              .from(teamMemberships)
-              .where(
-                and(
-                  eq(teamMemberships.userId, user.id),
-                  eq(teamMemberships.active, true),
-                ),
-              )
-          ).map((membership) => membership.teamId);
+        : await db
+            .select({
+              teamId: teamMemberships.teamId,
+              teamName: teams.name,
+              membershipRole: teamMemberships.membershipRole,
+            })
+            .from(teamMemberships)
+            .innerJoin(teams, eq(teamMemberships.teamId, teams.id))
+            .where(
+              and(
+                eq(teamMemberships.userId, user.id),
+                eq(teamMemberships.active, true),
+                eq(teams.active, true),
+                eq(teams.seasonId, season.id),
+              ),
+            )
+            .orderBy(asc(teams.name), asc(teams.id));
+    const viewerTeamIds = viewerTeams.map((membership) => membership.teamId);
     const visibleGames = allGames.filter(
       (game) =>
         game.status !== "CANCELLED" &&
@@ -1207,6 +1214,7 @@ router.get("/dashboard", async (_req, res, next) => {
               source: nextBye.bye.source,
             }
           : null,
+        myTeams: viewerTeams,
         attentionItems,
         recentResults: allGames.filter((game) => game.status === "FINAL"),
       }),

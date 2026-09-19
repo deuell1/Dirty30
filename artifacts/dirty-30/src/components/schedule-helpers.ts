@@ -31,9 +31,9 @@ export type ScheduleWeekGroup = {
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-export function inferUserTeamId(dashboard?: Dashboard): number | undefined {
-  if (!dashboard || dashboard.role === "COMMISSIONER") return undefined;
-  return dashboard.nextBye?.teamId;
+export function inferUserTeamIds(dashboard?: Dashboard): number[] {
+  if (!dashboard || dashboard.role === "COMMISSIONER") return [];
+  return dashboard.myTeams.map((team) => team.teamId);
 }
 
 export function mergeScheduleData(
@@ -179,11 +179,27 @@ export function selectCurrentScheduleWeek(
 ) {
   if (groups.length === 0) return null;
   const current = groups.find(
-    (group) => group.startDate <= today && group.endDate >= today,
+    (group) =>
+      startOfCalendarWeek(group.startDate) <= today &&
+      endOfCalendarWeek(group.endDate) >= today,
   );
   if (current) return current.key;
-  const upcoming = groups.find((group) => group.startDate > today);
+  const upcoming = groups.find(
+    (group) => startOfCalendarWeek(group.startDate) > today,
+  );
   return upcoming?.key ?? groups[groups.length - 1].key;
+}
+
+export function adjacentScheduleWeekKey(
+  groups: ScheduleWeekGroup[],
+  activeKey: string | null,
+  direction: -1 | 1,
+) {
+  const index = groups.findIndex((group) => group.key === activeKey);
+  const target = index + direction;
+  return index >= 0 && target >= 0 && target < groups.length
+    ? groups[target].key
+    : null;
 }
 
 export function formatLeagueDate(date: string, includeWeekday = true) {

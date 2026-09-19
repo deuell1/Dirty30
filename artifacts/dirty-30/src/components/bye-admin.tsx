@@ -134,6 +134,7 @@ export function ByeWeekAdmin() {
 
   return (
     <section
+      id="schedule-byes"
       className="mt-8 space-y-5 rounded-[24px] border border-[hsl(var(--primary)/.3)] bg-[hsl(var(--primary)/.055)] p-4 sm:p-6"
       data-testid="bye-week-admin"
     >

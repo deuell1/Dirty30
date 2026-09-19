@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { Dashboard, Game, TeamBye } from "@workspace/api-client-react";
 import {
+  adjacentScheduleWeekKey,
   buildScheduleWeeks,
   filterByDate,
   filterByMode,
   filterByTeam,
-  inferUserTeamId,
+  inferUserTeamIds,
   mergeScheduleData,
   selectCurrentScheduleWeek,
   startOfCalendarWeek,
@@ -37,22 +38,25 @@ const bye = (values: Partial<TeamBye>): TeamBye =>
   }) as TeamBye;
 
 describe("schedule week helpers", () => {
-  it("uses only the membership-scoped bye signal for My Team", () => {
-    expect(inferUserTeamId(undefined)).toBeUndefined();
+  it("uses explicit active memberships for My Team without relying on byes", () => {
+    expect(inferUserTeamIds(undefined)).toEqual([]);
     expect(
-      inferUserTeamId({
+      inferUserTeamIds({
         role: "PLAYER",
-        nextBye: { teamId: 9 } as TeamBye,
-      } as Dashboard),
-    ).toBe(9);
-    expect(
-      inferUserTeamId({
-        role: "PLAYER",
+        myTeams: [
+          { teamId: 9, teamName: "Nine", membershipRole: "PLAYER" },
+          { teamId: 12, teamName: "Twelve", membershipRole: "CAPTAIN" },
+        ],
         nextBye: null,
-        nextGame: { homeTeamId: 1, awayTeamId: 2 },
-        recentResults: [{ homeTeamId: 1, awayTeamId: 2 }],
       } as Dashboard),
-    ).toBeUndefined();
+    ).toEqual([9, 12]);
+    expect(
+      inferUserTeamIds({
+        role: "COMMISSIONER",
+        myTeams: [],
+        nextBye: null,
+      } as Dashboard),
+    ).toEqual([]);
   });
 
   it("groups persisted schedule weeks across multiple dates", () => {
@@ -106,6 +110,38 @@ describe("schedule week helpers", () => {
     expect(selectCurrentScheduleWeek(groups, "2026-09-12")).toBe("week:1");
     expect(selectCurrentScheduleWeek(groups, "2026-09-19")).toBe("week:2");
     expect(selectCurrentScheduleWeek(groups, "2026-12-01")).toBe("week:3");
+  });
+
+  it("keeps the current calendar week selected between scheduled game dates", () => {
+    const groups = buildScheduleWeeks(
+      mergeScheduleData(
+        [
+          game({ id: 1, scheduleWeek: 1, date: "2026-09-16" }),
+          game({ id: 2, scheduleWeek: 2, date: "2026-09-23" }),
+        ],
+        [],
+      ),
+    );
+
+    expect(selectCurrentScheduleWeek(groups, "2026-09-19")).toBe("week:1");
+  });
+
+  it("navigates to adjacent league weeks without crossing schedule bounds", () => {
+    const groups = buildScheduleWeeks(
+      mergeScheduleData(
+        [
+          game({ id: 1, scheduleWeek: 1, date: "2026-09-16" }),
+          game({ id: 2, scheduleWeek: 2, date: "2026-09-23" }),
+          game({ id: 3, scheduleWeek: 3, date: "2026-09-30" }),
+        ],
+        [],
+      ),
+    );
+
+    expect(adjacentScheduleWeekKey(groups, "week:2", -1)).toBe("week:1");
+    expect(adjacentScheduleWeekKey(groups, "week:2", 1)).toBe("week:3");
+    expect(adjacentScheduleWeekKey(groups, "week:1", -1)).toBeNull();
+    expect(adjacentScheduleWeekKey(groups, "week:3", 1)).toBeNull();
   });
 
   it("applies team and date filters in every schedule mode", () => {

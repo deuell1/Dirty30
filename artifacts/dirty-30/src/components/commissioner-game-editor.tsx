@@ -151,13 +151,13 @@ export function CommissionerGameEditor({
     >
       <div className="max-h-[94dvh] w-full max-w-2xl overflow-y-auto rounded-t-[24px] bg-[hsl(var(--background))] shadow-2xl sm:rounded-[24px]">
         <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b bg-[hsl(var(--background))] p-4 sm:px-6">
-          <div>
+          <div className="min-w-0">
             <p className="text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--primary))]">
               Commissioner
             </p>
             <h2
               id="game-editor-title"
-              className="font-display text-2xl font-bold"
+              className="font-display text-2xl font-bold truncate"
             >
               {game ? "Edit game" : "Add game"}
             </h2>
@@ -165,7 +165,8 @@ export function CommissionerGameEditor({
           <button
             type="button"
             onClick={onClose}
-            className="grid min-h-[44px] min-w-[44px] place-items-center rounded-xl border"
+            data-testid="action-close-editor"
+            className="grid min-h-[44px] min-w-[44px] shrink-0 place-items-center rounded-xl border hover:bg-[hsl(var(--muted)/.5)] transition-colors"
             aria-label="Close game editor"
           >
             <X className="h-5 w-5" />
@@ -196,6 +197,7 @@ export function CommissionerGameEditor({
                   setForm((current) => ({ ...current, homeTeamId: value }))
                 }
                 options={activeTeams.map((team) => [team.id, team.name])}
+                testId="select-home-team"
               />
               <Select
                 label="Away team"
@@ -205,6 +207,7 @@ export function CommissionerGameEditor({
                   setForm((current) => ({ ...current, awayTeamId: value }))
                 }
                 options={activeTeams.map((team) => [team.id, team.name])}
+                testId="select-away-team"
               />
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -220,6 +223,7 @@ export function CommissionerGameEditor({
                   }))
                 }
                 options={venues.map((venue) => [venue.id, venue.name])}
+                testId="select-venue"
               />
               <Select
                 label="Court"
@@ -229,6 +233,7 @@ export function CommissionerGameEditor({
                   setForm((current) => ({ ...current, courtId: value }))
                 }
                 options={courts.map((court) => [court.id, court.name])}
+                testId="select-court"
               />
             </div>
             <label className="text-xs font-bold">
@@ -237,6 +242,7 @@ export function CommissionerGameEditor({
                 type="datetime-local"
                 value={form.scheduledAt}
                 disabled={schedulingLocked}
+                data-testid="input-scheduled-at"
                 onChange={(event) =>
                   setForm((current) => ({
                     ...current,
@@ -250,7 +256,8 @@ export function CommissionerGameEditor({
               <button
                 type="submit"
                 disabled={createGame.isPending || updateGame.isPending}
-                className="min-h-[44px] rounded-xl bg-[hsl(var(--primary))] px-4 text-sm font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50"
+                data-testid="action-save-game"
+                className="min-h-[44px] rounded-xl bg-[hsl(var(--primary))] px-4 text-sm font-bold text-[hsl(var(--primary-foreground))] shadow-sm disabled:opacity-50 transition-opacity hover:opacity-90 mt-2"
               >
                 {game ? "Save schedule changes" : "Save draft game"}
               </button>
@@ -262,13 +269,14 @@ export function CommissionerGameEditor({
               {!game.published && game.status === GameStatus.SCHEDULED && (
                 <button
                   type="button"
+                  data-testid="action-publish-game"
                   onClick={() =>
                     publishGame.mutate(
                       { gameId: game.id },
                       { onSuccess: refresh },
                     )
                   }
-                  className="min-h-[44px] rounded-xl border px-4 text-sm font-bold"
+                  className="min-h-[44px] flex-1 sm:flex-none rounded-xl border px-4 text-sm font-bold shadow-sm hover:border-[hsl(var(--primary))] transition-colors"
                 >
                   Publish game
                 </button>
@@ -277,13 +285,14 @@ export function CommissionerGameEditor({
                 game.status !== GameStatus.CANCELLED && (
                   <button
                     type="button"
+                    data-testid="action-cancel-game"
                     onClick={() =>
                       cancelGame.mutate(
                         { gameId: game.id },
                         { onSuccess: refresh },
                       )
                     }
-                    className="min-h-[44px] rounded-xl border border-[hsl(var(--destructive)/.45)] px-4 text-sm font-bold text-[hsl(var(--destructive))]"
+                    className="min-h-[44px] flex-1 sm:flex-none rounded-xl border border-[hsl(var(--destructive)/.45)] px-4 text-sm font-bold text-[hsl(var(--destructive))] shadow-sm hover:border-[hsl(var(--destructive))] transition-colors"
                   >
                     Cancel game
                   </button>
@@ -304,12 +313,14 @@ function Select({
   disabled,
   onChange,
   options,
+  testId,
 }: {
   label: string;
   value: string;
   disabled?: boolean;
   onChange: (value: string) => void;
   options: Array<[number, string]>;
+  testId?: string;
 }) {
   return (
     <label className="text-xs font-bold">
@@ -317,6 +328,7 @@ function Select({
       <select
         value={value}
         disabled={disabled}
+        data-testid={testId}
         onChange={(event) => onChange(event.target.value)}
         className={fieldClass}
       >

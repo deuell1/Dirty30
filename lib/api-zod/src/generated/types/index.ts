@@ -20,6 +20,8 @@ export * from './courtInput';
 export * from './courtUpdate';
 export * from './dashboard';
 export * from './dashboardRole';
+export * from './dashboardTeam';
+export * from './dashboardTeamMembershipRole';
 export * from './deleteTeamByeParams';
 export * from './disputeInput';
 export * from './game';
