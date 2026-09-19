@@ -11,13 +11,12 @@ import {
   getGetTeamQueryKey,
   getGetTeamRosterQueryKey,
   getListGamesQueryKey,
+  useListScheduleWeeks,
   getListTeamsQueryKey,
-  useListTeamByes,
   type Dashboard,
   type Game,
   type Player,
   type Team,
-  type TeamBye,
   useAcceptInvitation,
   useAssignTeamCaptain,
   useCancelInvitation,
@@ -464,14 +463,12 @@ export function TeamDetailPage() {
 }
 
 export function SchedulePage() {
-  const gamesQuery = useListGames();
-  const byesQuery = useListTeamByes();
+  const scheduleWeeksQuery = useListScheduleWeeks();
   const teamsQuery = useListTeams();
   const profile = useGetCurrentUser();
   const dashboard = useGetDashboard();
 
-  const gamesList = (gamesQuery.data ?? []) as Game[];
-  const byesList = (byesQuery.data ?? []) as TeamBye[];
+  const scheduleWeeks = scheduleWeeksQuery.data ?? [];
   const teamList = (teamsQuery.data ?? []) as Team[];
   const dashboardData = dashboard.data as Dashboard | undefined;
 
@@ -494,12 +491,11 @@ export function SchedulePage() {
       </div>
       <div className="mt-6">
         <ScheduleView
-          games={gamesList}
-          byes={byesList}
+          scheduleWeeks={scheduleWeeks}
           teams={teamList}
           dashboard={dashboardData}
           commissioner={commissioner}
-          scheduleLoaded={!gamesQuery.isLoading && !byesQuery.isLoading}
+          scheduleLoaded={!scheduleWeeksQuery.isLoading}
         />
       </div>
       {commissioner && (

@@ -5,8 +5,10 @@ import {
   GameStatus,
   getListCourtsQueryKey,
   getListGamesQueryKey,
+  getListScheduleWeeksQueryKey,
   type Court,
   type Game,
+  type ScheduleWeek,
   type Team,
   type Venue,
   useCancelGame,
@@ -49,11 +51,15 @@ export function isSchedulingLocked(game?: Pick<Game, "status">) {
 export function CommissionerGameEditor({
   game,
   teams,
+  scheduleWeeks = [],
+  initialScheduleWeekId,
   initialDate,
   onClose,
 }: {
   game?: Game;
   teams: Team[];
+  scheduleWeeks?: ScheduleWeek[];
+  initialScheduleWeekId?: number;
   initialDate?: string;
   onClose: () => void;
 }) {
@@ -63,7 +69,7 @@ export function CommissionerGameEditor({
   const updateGame = useUpdateGame();
   const publishGame = usePublishGame();
   const cancelGame = useCancelGame();
-  const initial = game
+  const initialBase = game
     ? scheduleFormForEdit(game, toTwentyFourHour)
     : {
         homeTeamId: "",
@@ -72,6 +78,10 @@ export function CommissionerGameEditor({
         courtId: "",
         scheduledAt: `${initialDate ?? ""}T18:00`,
       };
+  const initial = {
+    ...initialBase,
+    scheduleWeekId: String(initialScheduleWeekId ?? ""),
+  };
   const [form, setForm] = useState(initial);
   const selectedVenueId = Number(form.venueId);
   const courtsQuery = useListCourts(selectedVenueId || 0, {
@@ -104,8 +114,10 @@ export function CommissionerGameEditor({
     }
   }, [courts, form.courtId]);
 
-  const refresh = () =>
+  const refresh = () => {
     void client.invalidateQueries({ queryKey: getListGamesQueryKey() });
+    void client.invalidateQueries({ queryKey: getListScheduleWeeksQueryKey() });
+  };
 
   const save = (event: FormEvent) => {
     event.preventDefault();
@@ -116,6 +128,7 @@ export function CommissionerGameEditor({
       awayTeamId: Number(form.awayTeamId),
       venueId: Number(form.venueId),
       courtId: Number(form.courtId),
+      scheduleWeekId: Number(form.scheduleWeekId),
       scheduledAt: scheduled.toISOString(),
     };
     if (
@@ -211,6 +224,28 @@ export function CommissionerGameEditor({
               />
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
+              <Select
+                label="Schedule week"
+                value={form.scheduleWeekId}
+                disabled={schedulingLocked}
+                onChange={(value) => {
+                  const week = scheduleWeeks.find(
+                    (candidate) => candidate.id === Number(value),
+                  );
+                  setForm((current) => ({
+                    ...current,
+                    scheduleWeekId: value,
+                    scheduledAt: week
+                      ? `${week.playDate}T${current.scheduledAt.split("T")[1] ?? "18:00"}`
+                      : current.scheduledAt,
+                  }));
+                }}
+                options={scheduleWeeks.map((week) => [
+                  week.id,
+                  `Week ${week.weekNumber}`,
+                ])}
+                testId="select-schedule-week"
+              />
               <Select
                 label="Venue"
                 value={form.venueId}

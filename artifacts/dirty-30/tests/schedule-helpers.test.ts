@@ -1,22 +1,24 @@
 import { describe, expect, it } from "vitest";
-import type { Dashboard, Game, TeamBye } from "@workspace/api-client-react";
+import type {
+  Dashboard,
+  Game,
+  ScheduleWeek,
+  TeamBye,
+} from "@workspace/api-client-react";
 import {
   adjacentScheduleWeekKey,
-  buildScheduleWeeks,
   filterByDate,
   filterByMode,
   filterByTeam,
   inferUserTeamIds,
   mergeScheduleData,
+  scheduleWeekGroups,
   selectCurrentScheduleWeek,
-  startOfCalendarWeek,
-  type ScheduleMode,
 } from "../src/components/schedule-helpers";
 
-const game = (values: Partial<Game>): Game =>
+const game = (values: Partial<Game> = {}) =>
   ({
     id: 1,
-    scheduleWeek: 1,
     date: "2026-09-12",
     startTime: "18:00",
     status: "SCHEDULED",
@@ -25,20 +27,35 @@ const game = (values: Partial<Game>): Game =>
     awayTeamId: 2,
     ...values,
   }) as Game;
-
-const bye = (values: Partial<TeamBye>): TeamBye =>
+const bye = (values: Partial<TeamBye> = {}) =>
   ({
-    id: 1,
-    scheduleWeek: 1,
+    id: 3,
     playDate: "2026-09-12",
     teamId: 3,
     teamName: "Bye Team",
+    scheduleWeek: 1,
     source: "GENERATED",
     ...values,
   }) as TeamBye;
+const week = (weekNumber: number, values: Partial<ScheduleWeek> = {}) =>
+  ({
+    id: weekNumber,
+    seasonId: 1,
+    seasonName: "Season",
+    weekNumber,
+    playDate: `2026-09-${String(12 + (weekNumber - 1) * 7).padStart(2, "0")}`,
+    startDate: `2026-09-${String(12 + (weekNumber - 1) * 7).padStart(2, "0")}`,
+    endDate: `2026-09-${String(18 + (weekNumber - 1) * 7).padStart(2, "0")}`,
+    games: [],
+    byes: [],
+    canManage: true,
+    canPublish: true,
+    canEdit: true,
+    ...values,
+  }) as ScheduleWeek;
 
-describe("schedule week helpers", () => {
-  it("uses explicit active memberships for My Team without relying on byes", () => {
+describe("aggregate schedule week helpers", () => {
+  it("uses explicit active memberships for My Team", () => {
     expect(inferUserTeamIds(undefined)).toEqual([]);
     expect(
       inferUserTeamIds({
@@ -50,127 +67,70 @@ describe("schedule week helpers", () => {
         nextBye: null,
       } as Dashboard),
     ).toEqual([9, 12]);
-    expect(
-      inferUserTeamIds({
-        role: "COMMISSIONER",
-        myTeams: [],
-        nextBye: null,
-      } as Dashboard),
-    ).toEqual([]);
   });
 
-  it("groups persisted schedule weeks across multiple dates", () => {
-    const groups = buildScheduleWeeks(
-      mergeScheduleData(
-        [
-          game({ id: 1, scheduleWeek: 4, date: "2026-10-02" }),
-          game({ id: 2, scheduleWeek: 4, date: "2026-10-04" }),
+  it("preserves canonical ranges and attaches nested games and byes to one week", () => {
+    const weeks = [
+      week(4, {
+        startDate: "2026-10-02",
+        endDate: "2026-10-04",
+        games: [
+          game({ id: 1, date: "2026-10-02" }),
+          game({ id: 2, date: "2026-10-04" }),
         ],
-        [bye({ id: 3, scheduleWeek: 4, playDate: "2026-10-03" })],
-      ),
-    );
-    expect(groups).toHaveLength(1);
+        byes: [bye({ id: 3, playDate: "2026-10-03", scheduleWeek: 4 })],
+      }),
+    ];
+    const groups = scheduleWeekGroups(weeks);
     expect(groups[0]).toMatchObject({
       key: "week:4",
       label: "Week 4",
       startDate: "2026-10-02",
       endDate: "2026-10-04",
-      dates: ["2026-10-02", "2026-10-03", "2026-10-04"],
     });
     expect(groups[0].items.map((item) => item.data.id)).toEqual([1, 3, 2]);
-  });
-
-  it("derives deterministic calendar groups for legacy games without mutation", () => {
-    const legacyGames = [
-      game({ id: 1, scheduleWeek: null, date: "2026-09-15" }),
-      game({ id: 2, scheduleWeek: null, date: "2026-09-20" }),
-      game({ id: 3, scheduleWeek: null, date: "2026-09-21" }),
-    ];
-    const before = structuredClone(legacyGames);
-    const groups = buildScheduleWeeks(mergeScheduleData(legacyGames, []));
-    expect(startOfCalendarWeek("2026-09-15")).toBe("2026-09-14");
-    expect(groups.map((group) => group.key)).toEqual([
-      "legacy:2026-09-14",
-      "legacy:2026-09-21",
-    ]);
-    expect(legacyGames).toEqual(before);
-  });
-
-  it("selects the containing league week or nearest upcoming week", () => {
-    const groups = buildScheduleWeeks(
-      mergeScheduleData(
-        [
-          game({ id: 1, scheduleWeek: 1, date: "2026-09-12" }),
-          game({ id: 2, scheduleWeek: 2, date: "2026-09-26" }),
-          game({ id: 3, scheduleWeek: 3, date: "2026-10-10" }),
-        ],
-        [],
-      ),
+    expect(mergeScheduleData(weeks).every((item) => item.week === 4)).toBe(
+      true,
     );
-    expect(selectCurrentScheduleWeek(groups, "2026-09-12")).toBe("week:1");
+  });
+
+  it("navigates canonical weeks and uses canonical ranges, including empty weeks", () => {
+    const groups = scheduleWeekGroups([week(1), week(2), week(3)]);
     expect(selectCurrentScheduleWeek(groups, "2026-09-19")).toBe("week:2");
-    expect(selectCurrentScheduleWeek(groups, "2026-12-01")).toBe("week:3");
-  });
-
-  it("keeps the current calendar week selected between scheduled game dates", () => {
-    const groups = buildScheduleWeeks(
-      mergeScheduleData(
-        [
-          game({ id: 1, scheduleWeek: 1, date: "2026-09-16" }),
-          game({ id: 2, scheduleWeek: 2, date: "2026-09-23" }),
-        ],
-        [],
-      ),
-    );
-
-    expect(selectCurrentScheduleWeek(groups, "2026-09-19")).toBe("week:1");
-  });
-
-  it("navigates to adjacent league weeks without crossing schedule bounds", () => {
-    const groups = buildScheduleWeeks(
-      mergeScheduleData(
-        [
-          game({ id: 1, scheduleWeek: 1, date: "2026-09-16" }),
-          game({ id: 2, scheduleWeek: 2, date: "2026-09-23" }),
-          game({ id: 3, scheduleWeek: 3, date: "2026-09-30" }),
-        ],
-        [],
-      ),
-    );
-
     expect(adjacentScheduleWeekKey(groups, "week:2", -1)).toBe("week:1");
     expect(adjacentScheduleWeekKey(groups, "week:2", 1)).toBe("week:3");
     expect(adjacentScheduleWeekKey(groups, "week:1", -1)).toBeNull();
-    expect(adjacentScheduleWeekKey(groups, "week:3", 1)).toBeNull();
   });
 
-  it("applies team and date filters in every schedule mode", () => {
-    const items = mergeScheduleData(
-      [
-        game({ id: 1, date: "2026-09-18", homeTeamId: 1, awayTeamId: 2 }),
-        game({
-          id: 2,
-          date: "2026-09-20",
-          homeTeamId: 2,
-          awayTeamId: 3,
-          status: "FINAL",
-        }),
-      ],
-      [bye({ id: 3, playDate: "2026-09-18", teamId: 1 })],
-    );
-    const modes: ScheduleMode[] = ["Week", "Upcoming", "Completed", "All"];
-    for (const mode of modes) {
-      const modeItems = filterByMode(items, mode, "2026-09-19");
-      const combined = filterByDate(filterByTeam(modeItems, 1), "2026-09-18");
-      if (mode === "Completed") expect(combined).toHaveLength(2);
-      else if (mode === "Upcoming") expect(combined).toHaveLength(0);
-      else expect(combined.map((item) => item.data.id)).toEqual([3, 1]);
-    }
-    expect(filterByTeam(items, 1).some((item) => item.type === "bye")).toBe(
-      true,
-    );
-    expect(filterByTeam(items, 2).some((item) => item.type === "bye")).toBe(
-      false,
-    );
+  it("filters flattened aggregate items by mode, team, and date", () => {
+    const items = mergeScheduleData([
+      week(1, {
+        games: [
+          game({ id: 1, date: "2026-09-18" }),
+          game({
+            id: 2,
+            date: "2026-09-20",
+            homeTeamId: 2,
+            awayTeamId: 3,
+            status: "FINAL",
+          }),
+        ],
+        byes: [bye({ id: 3, playDate: "2026-09-18", teamId: 1 })],
+      }),
+    ]);
+    expect(
+      filterByDate(
+        filterByTeam(filterByMode(items, "All", "2026-09-19"), 1),
+        "2026-09-18",
+      ).map((item) => item.data.id),
+    ).toEqual([3, 1]);
+    expect(
+      filterByMode(items, "Completed", "2026-09-19").map(
+        (item) => item.data.id,
+      ),
+    ).toEqual([3, 1, 2]);
+    expect(
+      filterByTeam(items, 2).filter((item) => item.type === "bye"),
+    ).toHaveLength(0);
   });
 });

@@ -43,6 +43,13 @@
       "when": 1789847462478,
       "tag": "0005_careful_kabuki",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789855302352,
+      "tag": "0006_amused_cardiac",
+      "breakpoints": true
     }
   ]
 }

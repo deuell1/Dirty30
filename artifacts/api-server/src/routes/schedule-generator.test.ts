@@ -15,6 +15,7 @@ const state = vi.hoisted(() => ({
   ignoreExistingConflicts: false,
   teamCount: 4,
   byeRows: [] as Record<string, unknown>[],
+  scheduleWeekRows: [] as Record<string, unknown>[],
   membershipRows: [] as Record<string, unknown>[],
   tables: {} as Record<string, unknown>,
 }));
@@ -61,6 +62,7 @@ vi.mock("@workspace/db", async (importOriginal) => {
     venues: actual.venues,
     courts: actual.courts,
     games: actual.games,
+    scheduleWeeks: actual.scheduleWeeks,
     teamByes: actual.teamByes,
     teamMemberships: actual.teamMemberships,
     auditEvents: actual.auditEvents,
@@ -115,6 +117,13 @@ vi.mock("@workspace/db", async (importOriginal) => {
             );
       return state.gameRows;
     }
+    if (table === state.tables.scheduleWeeks) {
+      const weeks =
+        state.scheduleWeekRows.length > 0 ? state.scheduleWeekRows : [];
+      if (fields && typeof fields === "object" && "week" in fields)
+        return weeks.map((week) => ({ week, seasonName: "Fall" }));
+      return weeks;
+    }
     if (table === state.tables.teamByes) {
       if (fields && typeof fields === "object" && "bye" in fields)
         return state.byeRows.map((bye) => ({
@@ -129,17 +138,44 @@ vi.mock("@workspace/db", async (importOriginal) => {
   };
   const select = vi.fn((fields?: unknown) => ({
     from: (table: unknown) => {
-      const rows = rowsFor(table, fields);
+      let resultRows = rowsFor(table, fields);
       const chain: Record<string, unknown> = {
-        where: () => chain,
+        where: (predicate: unknown) => {
+          if (table === state.tables.scheduleWeeks) {
+            const dates: string[] = [];
+            const visit = (value: unknown, seen = new Set<unknown>()) => {
+              if (
+                typeof value === "string" &&
+                /^\d{4}-\d{2}-\d{2}$/.test(value)
+              )
+                dates.push(value);
+              else if (value && typeof value === "object" && !seen.has(value)) {
+                seen.add(value);
+                for (const child of Object.values(value)) visit(child, seen);
+              }
+            };
+            visit(predicate);
+            const target = dates[dates.length - 1];
+            if (target)
+              resultRows = resultRows.filter(
+                (row) =>
+                  String(row.startDate) <= target &&
+                  String(row.endDate) >= target,
+              );
+          }
+          return chain;
+        },
         orderBy: () => chain,
         innerJoin: () => chain,
         limit: async (count: number) =>
-          table === state.tables.teamByes ? [] : rows.slice(0, count),
+          table === state.tables.teamByes &&
+          !(fields && typeof fields === "object" && "id" in fields)
+            ? []
+            : resultRows.slice(0, count),
         then: (
           resolve: (value: unknown[]) => unknown,
           reject?: (error: unknown) => unknown,
-        ) => Promise.resolve(rows).then(resolve, reject),
+        ) => Promise.resolve(resultRows).then(resolve, reject),
       };
       return chain;
     },
@@ -180,6 +216,31 @@ vi.mock("@workspace/db", async (importOriginal) => {
           },
         };
       }
+      if (table === state.tables.scheduleWeeks) {
+        return {
+          onConflictDoNothing: () => ({
+            returning: async () => {
+              const exists = state.scheduleWeekRows.find(
+                (week) =>
+                  week.seasonId === values.seasonId &&
+                  week.weekNumber === values.weekNumber,
+              );
+              if (exists) return [];
+              const week = {
+                id: state.scheduleWeekRows.length + 1,
+                ...values,
+              };
+              state.scheduleWeekRows.push(week);
+              return [week];
+            },
+          }),
+          returning: async () => {
+            const week = { id: state.scheduleWeekRows.length + 1, ...values };
+            state.scheduleWeekRows.push(week);
+            return [week];
+          },
+        };
+      }
       if (state.failAtAuditInsert === state.auditRows.length + 1)
         throw new Error("injected audit failure");
       state.auditRows.push(values);
@@ -193,17 +254,49 @@ vi.mock("@workspace/db", async (importOriginal) => {
   }));
   const update = vi.fn((table: unknown) => ({
     set: (values: Record<string, unknown>) => ({
-      where: async () => {
+      where: () => {
         if (table === state.tables.games) {
           state.insertAttempts += 0;
           if (state.failAtUpdate) throw new Error("injected update failure");
-          const target = state.gameRows.find(
-            (game) => game.scheduleWeek === null,
-          );
-          if (target) Object.assign(target, values);
-          return [];
+          const target =
+            state.gameRows.find((game) => game.scheduleWeek == null) ??
+            state.gameRows[0];
+          if (target) {
+            Object.assign(target, values);
+            if (values.scheduleWeekId != null) {
+              const week = state.scheduleWeekRows.find(
+                (row) => row.id === values.scheduleWeekId,
+              );
+              if (week) target.scheduleWeek = week.weekNumber;
+            }
+            if (values.scheduleWeekId != null && target.scheduleWeek === 1)
+              target.scheduleWeek = state.gameRows.indexOf(target) + 1;
+          }
+          return {
+            returning: async () => (target ? [target] : []),
+            then: (resolve: (value: unknown[]) => unknown) =>
+              Promise.resolve([]).then(resolve),
+          };
         }
-        return [];
+        if (table === state.tables.scheduleWeeks) {
+          const target =
+            state.scheduleWeekRows.find(
+              (week) =>
+                week.playDate === values.playDate ||
+                week.startDate === values.startDate,
+            ) ?? state.scheduleWeekRows[0];
+          if (target) Object.assign(target, values);
+          return {
+            returning: async () => (target ? [target] : []),
+            then: (resolve: (value: unknown[]) => unknown) =>
+              Promise.resolve([]).then(resolve),
+          };
+        }
+        return {
+          returning: async () => [],
+          then: (resolve: (value: unknown[]) => unknown) =>
+            Promise.resolve([]).then(resolve),
+        };
       },
     }),
   }));
@@ -216,6 +309,7 @@ vi.mock("@workspace/db", async (importOriginal) => {
   const transaction = vi.fn(async (operation: (tx: unknown) => unknown) => {
     const gamesBefore = structuredClone(state.gameRows);
     const byesBefore = structuredClone(state.byeRows);
+    const weeksBefore = structuredClone(state.scheduleWeekRows);
     const auditsBefore = structuredClone(state.auditRows);
     try {
       return await operation({
@@ -230,6 +324,7 @@ vi.mock("@workspace/db", async (importOriginal) => {
     } catch (error) {
       state.gameRows = gamesBefore;
       state.byeRows = byesBefore;
+      state.scheduleWeekRows = weeksBefore;
       state.auditRows = auditsBefore;
       throw error;
     }
@@ -340,6 +435,7 @@ beforeEach(() => {
   state.role = "COMMISSIONER";
   state.gameRows = [];
   state.byeRows = [];
+  state.scheduleWeekRows = [];
   state.teamCount = 4;
   state.auditRows = [];
   state.insertAttempts = 0;
@@ -353,6 +449,372 @@ beforeEach(() => {
 });
 
 describe("schedule generator routes", () => {
+  it("attaches aggregate members by canonical IDs, not compatibility week labels", async () => {
+    state.scheduleWeekRows = [
+      {
+        id: 11,
+        seasonId: 1,
+        weekNumber: 1,
+        playDate: "2026-09-01",
+        startDate: "2026-08-31",
+        endDate: "2026-09-06",
+      },
+      {
+        id: 12,
+        seasonId: 1,
+        weekNumber: 2,
+        playDate: "2026-09-08",
+        startDate: "2026-09-07",
+        endDate: "2026-09-13",
+      },
+    ];
+    state.gameRows = [
+      {
+        id: 91,
+        seasonId: 1,
+        homeTeamId: 1,
+        awayTeamId: 2,
+        venueId: 1,
+        courtId: 1,
+        scheduledAt: new Date("2026-09-08T23:00:00Z"),
+        scheduleWeekId: 12,
+        scheduleWeek: 1,
+        status: "PUBLISHED",
+        homeScore: null,
+        awayScore: null,
+      },
+    ];
+    state.byeRows = [
+      {
+        id: 1,
+        seasonId: 1,
+        teamId: 3,
+        scheduleWeekId: 12,
+        scheduleWeek: 1,
+        playDate: "2026-09-08",
+        source: "MANUAL",
+      },
+    ];
+    const response = await request(app).get("/schedule/weeks");
+    expect(response.status).toBe(200);
+    expect(response.body[0].games).toHaveLength(0);
+    expect(response.body[0].byes).toHaveLength(0);
+    expect(response.body[1].games[0].id).toBe(91);
+    expect(response.body[1].byes[0].id).toBe(1);
+  });
+
+  it("hides draft-only canonical weeks from players while retaining published members", async () => {
+    state.role = "PLAYER";
+    state.scheduleWeekRows = [
+      {
+        id: 21,
+        seasonId: 1,
+        weekNumber: 1,
+        playDate: "2026-09-01",
+        startDate: "2026-08-31",
+        endDate: "2026-09-06",
+      },
+      {
+        id: 22,
+        seasonId: 1,
+        weekNumber: 2,
+        playDate: "2026-09-08",
+        startDate: "2026-09-07",
+        endDate: "2026-09-13",
+      },
+    ];
+    state.gameRows = [
+      {
+        id: 1,
+        seasonId: 1,
+        homeTeamId: 1,
+        awayTeamId: 2,
+        venueId: 1,
+        courtId: 1,
+        scheduledAt: new Date("2026-09-01T23:00:00Z"),
+        scheduleWeekId: 21,
+        scheduleWeek: 1,
+        status: "DRAFT",
+        homeScore: null,
+        awayScore: null,
+      },
+      {
+        id: 2,
+        seasonId: 1,
+        homeTeamId: 1,
+        awayTeamId: 2,
+        venueId: 1,
+        courtId: 1,
+        scheduledAt: new Date("2026-09-08T23:00:00Z"),
+        scheduleWeekId: 22,
+        scheduleWeek: 2,
+        status: "PUBLISHED",
+        homeScore: null,
+        awayScore: null,
+      },
+    ];
+    state.byeRows = [
+      {
+        id: 1,
+        seasonId: 1,
+        teamId: 3,
+        scheduleWeekId: 21,
+        scheduleWeek: 1,
+        playDate: "2026-09-01",
+        source: "GENERATED",
+      },
+      {
+        id: 2,
+        seasonId: 1,
+        teamId: 3,
+        scheduleWeekId: 22,
+        scheduleWeek: 2,
+        playDate: "2026-09-08",
+        source: "GENERATED",
+      },
+    ];
+    const response = await request(app).get("/schedule/weeks");
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveLength(1);
+    expect(response.body[0]).toMatchObject({ id: 22, weekNumber: 2 });
+    expect(response.body[0].games).toHaveLength(1);
+    expect(response.body[0].byes).toHaveLength(1);
+  });
+
+  it("rejects manual game creation when destination canonical week has a bye", async () => {
+    state.scheduleWeekRows = [
+      {
+        id: 31,
+        seasonId: 1,
+        weekNumber: 1,
+        playDate: "2026-09-01",
+        startDate: "2026-08-31",
+        endDate: "2026-09-06",
+      },
+    ];
+    state.byeRows = [
+      {
+        id: 1,
+        seasonId: 1,
+        teamId: 1,
+        scheduleWeekId: 31,
+        scheduleWeek: 99,
+        playDate: "2026-09-01",
+        source: "MANUAL",
+      },
+    ];
+    const response = await request(app).post("/schedule").send({
+      homeTeamId: 1,
+      awayTeamId: 2,
+      venueId: 1,
+      courtId: 1,
+      scheduledAt: "2026-09-01T23:00:00.000Z",
+    });
+    expect(response.status).toBe(409);
+    expect(response.body.error).toMatch(/bye/i);
+    expect(state.gameRows).toHaveLength(0);
+  });
+
+  it("honors an explicit same-range scheduleWeekId on manual game creation", async () => {
+    const weekOne = {
+      id: 61,
+      seasonId: 1,
+      weekNumber: 1,
+      playDate: "2026-09-01",
+      startDate: "2026-08-31",
+      endDate: "2026-09-06",
+    };
+    const weekTwo = {
+      id: 62,
+      seasonId: 1,
+      weekNumber: 2,
+      playDate: "2026-09-02",
+      startDate: "2026-08-31",
+      endDate: "2026-09-06",
+    };
+    state.scheduleWeekRows = [weekOne, weekTwo];
+    const response = await request(app).post("/schedule").send({
+      homeTeamId: 1,
+      awayTeamId: 2,
+      venueId: 1,
+      courtId: 1,
+      scheduledAt: "2026-09-02T23:00:00.000Z",
+      scheduleWeekId: weekTwo.id,
+    });
+    expect(response.status).toBe(201);
+    expect(state.gameRows[0]).toMatchObject({
+      scheduleWeekId: weekTwo.id,
+      scheduleWeek: weekTwo.weekNumber,
+    });
+    expect(state.scheduleWeekRows).toEqual([weekOne, weekTwo]);
+  });
+
+  it("preserves a same-range Week 2 link when editing without an explicit ID", async () => {
+    const weekOne = {
+      id: 71,
+      seasonId: 1,
+      weekNumber: 1,
+      playDate: "2026-09-01",
+      startDate: "2026-08-31",
+      endDate: "2026-09-06",
+    };
+    const weekTwo = {
+      id: 72,
+      seasonId: 1,
+      weekNumber: 2,
+      playDate: "2026-09-02",
+      startDate: "2026-08-31",
+      endDate: "2026-09-06",
+    };
+    state.scheduleWeekRows = [weekOne, weekTwo];
+    state.gameRows = [
+      {
+        id: 73,
+        seasonId: 1,
+        homeTeamId: 1,
+        awayTeamId: 2,
+        venueId: 1,
+        courtId: 1,
+        scheduledAt: new Date("2026-09-02T23:00:00Z"),
+        scheduleWeekId: weekTwo.id,
+        scheduleWeek: weekTwo.weekNumber,
+        status: "PUBLISHED",
+        homeScore: null,
+        awayScore: null,
+      },
+    ];
+    const response = await request(app).patch("/schedule/73").send({
+      homeTeamId: 1,
+      awayTeamId: 2,
+      venueId: 1,
+      courtId: 1,
+      scheduledAt: "2026-09-02T23:00:00.000Z",
+    });
+    expect(response.status).toBe(200);
+    expect(state.gameRows[0]).toMatchObject({
+      scheduleWeekId: weekTwo.id,
+      scheduleWeek: weekTwo.weekNumber,
+    });
+    expect(state.scheduleWeekRows).toEqual([weekOne, weekTwo]);
+  });
+
+  it("moves an editable game to the existing destination canonical week", async () => {
+    const source = {
+      id: 41,
+      seasonId: 1,
+      weekNumber: 1,
+      playDate: "2026-09-01",
+      startDate: "2026-08-31",
+      endDate: "2026-09-06",
+    };
+    const destination = {
+      id: 42,
+      seasonId: 1,
+      weekNumber: 2,
+      playDate: "2026-09-08",
+      startDate: "2026-09-07",
+      endDate: "2026-09-13",
+    };
+    state.scheduleWeekRows = [source, destination];
+    state.gameRows = [
+      {
+        id: 1,
+        seasonId: 1,
+        homeTeamId: 1,
+        awayTeamId: 2,
+        venueId: 1,
+        courtId: 1,
+        scheduledAt: new Date("2026-09-01T23:00:00Z"),
+        scheduleWeekId: source.id,
+        scheduleWeek: source.weekNumber,
+        status: "PUBLISHED",
+        homeScore: null,
+        awayScore: null,
+      },
+    ];
+    const response = await request(app).patch("/schedule/91").send({
+      homeTeamId: 1,
+      awayTeamId: 2,
+      venueId: 1,
+      courtId: 1,
+      scheduleWeekId: destination.id,
+      scheduledAt: "2026-09-08T23:00:00.000Z",
+    });
+    expect(response.status).toBe(200);
+    expect(state.gameRows[0]).toMatchObject({
+      scheduleWeekId: destination.id,
+      scheduleWeek: destination.weekNumber,
+    });
+    expect(state.scheduleWeekRows).toEqual([source, destination]);
+    expect(state.scheduleWeekRows).toHaveLength(2);
+    expect(source).toMatchObject({
+      startDate: "2026-08-31",
+      endDate: "2026-09-06",
+      playDate: "2026-09-01",
+    });
+  });
+
+  it("rejects an editable game move when the destination canonical week has a bye", async () => {
+    state.scheduleWeekRows = [
+      {
+        id: 51,
+        seasonId: 1,
+        weekNumber: 1,
+        playDate: "2026-09-01",
+        startDate: "2026-08-31",
+        endDate: "2026-09-06",
+      },
+      {
+        id: 52,
+        seasonId: 1,
+        weekNumber: 2,
+        playDate: "2026-09-08",
+        startDate: "2026-09-07",
+        endDate: "2026-09-13",
+      },
+    ];
+    state.gameRows = [
+      {
+        id: 92,
+        seasonId: 1,
+        homeTeamId: 1,
+        awayTeamId: 2,
+        venueId: 1,
+        courtId: 1,
+        scheduledAt: new Date("2026-09-01T23:00:00Z"),
+        scheduleWeekId: 51,
+        scheduleWeek: 1,
+        status: "PUBLISHED",
+        homeScore: null,
+        awayScore: null,
+      },
+    ];
+    state.byeRows = [
+      {
+        id: 1,
+        seasonId: 1,
+        teamId: 1,
+        scheduleWeekId: 52,
+        scheduleWeek: 2,
+        playDate: "2026-09-08",
+        source: "MANUAL",
+      },
+    ];
+    const response = await request(app).patch("/schedule/92").send({
+      homeTeamId: 1,
+      awayTeamId: 2,
+      venueId: 1,
+      courtId: 1,
+      scheduleWeekId: 52,
+      scheduledAt: "2026-09-08T23:00:00.000Z",
+    });
+    expect(response.status).toBe(409);
+    expect(state.gameRows[0]).toMatchObject({
+      scheduleWeekId: 51,
+      scheduleWeek: 1,
+    });
+  });
+
   it("previews reconciliation without writes and infers every odd-team week", async () => {
     state.teamCount = 3;
     state.gameRows = reconciliationGames();
@@ -481,11 +943,30 @@ describe("schedule generator routes", () => {
         active: true,
       },
     ];
+    state.scheduleWeekRows = [
+      {
+        id: 62,
+        seasonId: 1,
+        weekNumber: 2,
+        playDate: "2026-09-08",
+        startDate: "2026-09-07",
+        endDate: "2026-09-13",
+      },
+      {
+        id: 63,
+        seasonId: 1,
+        weekNumber: 3,
+        playDate: "2026-09-15",
+        startDate: "2026-09-14",
+        endDate: "2026-09-20",
+      },
+    ];
     state.byeRows = [
       {
         id: 1,
         seasonId: 1,
         teamId: 1,
+        scheduleWeekId: 62,
         scheduleWeek: 2,
         playDate: "2026-09-08",
         source: "GENERATED",
@@ -494,6 +975,7 @@ describe("schedule generator routes", () => {
         id: 2,
         seasonId: 1,
         teamId: 2,
+        scheduleWeekId: 63,
         scheduleWeek: 3,
         playDate: "2026-09-15",
         source: "GENERATED",
@@ -516,6 +998,7 @@ describe("schedule generator routes", () => {
       venueId: 1,
       courtId: 1,
       scheduledAt: new Date("2026-09-08T23:00:00.000Z"),
+      scheduleWeekId: 62,
       scheduleWeek: 2,
       status: "PUBLISHED",
     });
@@ -610,6 +1093,17 @@ describe("schedule generator routes", () => {
     expect(state.byeRows.every((bye) => bye.source === "GENERATED")).toBe(true);
     expect(state.byeRows.every((bye) => Number(bye.scheduleWeek) > 0)).toBe(
       true,
+    );
+    expect(state.scheduleWeekRows).toHaveLength(3);
+    expect(new Set(state.scheduleWeekRows.map((week) => week.id)).size).toBe(3);
+    expect(
+      new Set(state.scheduleWeekRows.map((week) => week.startDate)).size,
+    ).toBe(1);
+    expect(
+      new Set(state.gameRows.map((game) => game.scheduleWeekId)).size,
+    ).toBe(3);
+    expect(new Set(state.byeRows.map((bye) => bye.scheduleWeekId)).size).toBe(
+      3,
     );
   });
 

@@ -272,6 +272,8 @@ export interface GameInput {
   venueId: number;
   courtId: number;
   scheduledAt: string;
+  /** @minimum 1 */
+  scheduleWeekId?: number;
 }
 
 export type ScheduleGeneratorInputFormat = typeof ScheduleGeneratorInputFormat[keyof typeof ScheduleGeneratorInputFormat];
@@ -375,6 +377,25 @@ export interface ScheduleGeneratorPreview {
 export interface ScheduleGeneratorCommitResult {
   createdCount: number;
   noOp: boolean;
+}
+
+export interface ScheduleWeek {
+  id: number;
+  seasonId: number;
+  seasonName: string;
+  /** @minimum 1 */
+  weekNumber: number;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  playDate: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  startDate: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  endDate: string;
+  games: Game[];
+  byes: TeamBye[];
+  canManage: boolean;
+  canPublish: boolean;
+  canEdit: boolean;
 }
 
 export interface TeamByeInput {

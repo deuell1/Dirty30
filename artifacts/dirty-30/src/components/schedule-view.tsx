@@ -12,12 +12,12 @@ import {
 import type {
   Dashboard,
   Game,
+  ScheduleWeek,
   Team,
   TeamBye,
 } from "@workspace/api-client-react";
 import {
   adjacentScheduleWeekKey,
-  buildScheduleWeeks,
   filterByDate,
   filterByMode,
   filterByTeam,
@@ -25,6 +25,7 @@ import {
   formatWeekRange,
   inferUserTeamIds,
   mergeScheduleData,
+  scheduleWeekGroups,
   selectCurrentScheduleWeek,
   type ScheduleItem,
   type ScheduleMode,
@@ -83,23 +84,27 @@ export function persistWeekSelection(
 }
 
 export function ScheduleView({
-  games,
-  byes,
+  scheduleWeeks,
   teams,
   dashboard,
   commissioner,
   scheduleLoaded = true,
 }: {
-  games: Game[];
-  byes: TeamBye[];
+  scheduleWeeks: ScheduleWeek[];
   teams: Team[];
   dashboard?: Dashboard;
   commissioner: boolean;
   scheduleLoaded?: boolean;
 }) {
   const today = useMemo(todayString, []);
-  const allItems = useMemo(() => mergeScheduleData(games, byes), [games, byes]);
-  const weeks = useMemo(() => buildScheduleWeeks(allItems), [allItems]);
+  const allItems = useMemo(
+    () => mergeScheduleData(scheduleWeeks),
+    [scheduleWeeks],
+  );
+  const weeks = useMemo(
+    () => scheduleWeekGroups(scheduleWeeks),
+    [scheduleWeeks],
+  );
   const currentWeekKey = useMemo(
     () => selectCurrentScheduleWeek(weeks, today),
     [weeks, today],
@@ -184,11 +189,21 @@ export function ScheduleView({
     () => filterByDate(teamItems, activeDate),
     [teamItems, activeDate],
   );
-  const visibleWeeks = useMemo(
-    () => buildScheduleWeeks(visibleItems),
-    [visibleItems],
-  );
+  const visibleWeeks = useMemo(() => {
+    const visible = new Set(visibleItems);
+    return weeks
+      .map((week) => ({
+        ...week,
+        items: week.items.filter((item) => visible.has(item)),
+      }))
+      .filter((week) => week.items.length > 0);
+  }, [visibleItems, weeks]);
   const counts = statusCounts(selectedWeek);
+  const editingScheduleWeekId = editingGame
+    ? scheduleWeeks.find((week) =>
+        week.games.some((game) => game.id === editingGame.id),
+      )?.id
+    : undefined;
   const selectedTeamName =
     teamFilter === "all"
       ? undefined
@@ -313,7 +328,6 @@ export function ScheduleView({
             {selectedWeek && (
               <p className="mt-0.5 break-words text-xs font-semibold text-[hsl(var(--muted-foreground))]">
                 {formatWeekRange(selectedWeek)}
-                {selectedWeek.isLegacy ? " · date-derived display week" : ""}
               </p>
             )}
           </div>
@@ -476,6 +490,8 @@ export function ScheduleView({
         <CommissionerGameEditor
           game={editingGame}
           teams={teams}
+          scheduleWeeks={scheduleWeeks}
+          initialScheduleWeekId={editingScheduleWeekId ?? selectedWeek?.id}
           initialDate={selectedWeek?.startDate ?? today}
           onClose={() => {
             setEditingGame(undefined);

@@ -2,6 +2,7 @@ import {
   boolean,
   check,
   date,
+  foreignKey,
   integer,
   jsonb,
   pgEnum,
@@ -200,6 +201,37 @@ export const courts = pgTable(
   (table) => [uniqueIndex("courts_venue_name").on(table.venueId, table.name)],
 );
 
+export const scheduleWeeks = pgTable(
+  "schedule_weeks",
+  {
+    id: serial("id").primaryKey(),
+    seasonId: integer("season_id")
+      .notNull()
+      .references(() => seasons.id, { onDelete: "restrict" }),
+    weekNumber: integer("week_number").notNull(),
+    playDate: date("play_date", { mode: "string" }).notNull(),
+    startDate: date("start_date", { mode: "string" }).notNull(),
+    endDate: date("end_date", { mode: "string" }).notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("schedule_weeks_season_week").on(
+      table.seasonId,
+      table.weekNumber,
+    ),
+    uniqueIndex("schedule_weeks_id_season").on(table.id, table.seasonId),
+    check("schedule_weeks_positive_week", sql`${table.weekNumber} > 0`),
+    check(
+      "schedule_weeks_valid_dates",
+      sql`${table.endDate} >= ${table.startDate}`,
+    ),
+    check(
+      "schedule_weeks_play_date_in_range",
+      sql`${table.playDate} >= ${table.startDate} AND ${table.playDate} <= ${table.endDate}`,
+    ),
+  ],
+);
+
 export const games = pgTable(
   "games",
   {
@@ -221,6 +253,7 @@ export const games = pgTable(
       .references(() => courts.id, { onDelete: "restrict" }),
     scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
     scheduleWeek: integer("schedule_week"),
+    scheduleWeekId: integer("schedule_week_id"),
     status: gameStatusEnum("status").notNull().default("DRAFT"),
     homeScore: integer("home_score"),
     awayScore: integer("away_score"),
@@ -249,6 +282,12 @@ export const games = pgTable(
   },
   (table) => [
     index("games_season_schedule_idx").on(table.seasonId, table.scheduledAt),
+    index("games_schedule_week_idx").on(table.seasonId, table.scheduleWeekId),
+    foreignKey({
+      columns: [table.scheduleWeekId, table.seasonId],
+      foreignColumns: [scheduleWeeks.id, scheduleWeeks.seasonId],
+      name: "games_schedule_week_season_fk",
+    }).onDelete("restrict"),
     check(
       "games_different_teams",
       sql`${table.homeTeamId} <> ${table.awayTeamId}`,
@@ -279,6 +318,7 @@ export const teamByes = pgTable(
       .notNull()
       .references(() => teams.id, { onDelete: "restrict" }),
     scheduleWeek: integer("schedule_week").notNull(),
+    scheduleWeekId: integer("schedule_week_id"),
     playDate: date("play_date", { mode: "string" }).notNull(),
     source: teamByeSourceEnum("source").notNull(),
     createdByUserId: integer("created_by_user_id").references(() => users.id, {
@@ -293,6 +333,15 @@ export const teamByes = pgTable(
       table.scheduleWeek,
     ),
     index("team_byes_season_date_idx").on(table.seasonId, table.playDate),
+    index("team_byes_schedule_week_idx").on(
+      table.seasonId,
+      table.scheduleWeekId,
+    ),
+    foreignKey({
+      columns: [table.scheduleWeekId, table.seasonId],
+      foreignColumns: [scheduleWeeks.id, scheduleWeeks.seasonId],
+      name: "team_byes_schedule_week_season_fk",
+    }).onDelete("restrict"),
     check("team_byes_positive_week", sql`${table.scheduleWeek} > 0`),
   ],
 );
@@ -324,6 +373,7 @@ export const insertPlayerInvitationSchema =
   createInsertSchema(playerInvitations);
 export const insertVenueSchema = createInsertSchema(venues);
 export const insertCourtSchema = createInsertSchema(courts);
+export const insertScheduleWeekSchema = createInsertSchema(scheduleWeeks);
 export const insertGameSchema = createInsertSchema(games);
 export const insertTeamByeSchema = createInsertSchema(teamByes);
 export const insertAuditEventSchema = createInsertSchema(auditEvents);
@@ -336,6 +386,7 @@ export type TeamMembership = typeof teamMemberships.$inferSelect;
 export type PlayerInvitation = typeof playerInvitations.$inferSelect;
 export type Venue = typeof venues.$inferSelect;
 export type Court = typeof courts.$inferSelect;
+export type ScheduleWeek = typeof scheduleWeeks.$inferSelect;
 export type Game = typeof games.$inferSelect;
 export type TeamBye = typeof teamByes.$inferSelect;
 export type AuditEvent = typeof auditEvents.$inferSelect;

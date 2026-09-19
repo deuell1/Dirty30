@@ -21,6 +21,33 @@ vi.mock("@workspace/api-client-react", async () => {
         },
       ],
     }),
+    useListScheduleWeeks: () => ({
+      data: [
+        {
+          id: 2,
+          seasonId: 1,
+          seasonName: "Season",
+          weekNumber: 2,
+          playDate: "2099-06-01",
+          startDate: "2099-05-26",
+          endDate: "2099-06-01",
+          games: [],
+          byes: [
+            {
+              id: 1,
+              teamName: "Team A",
+              scheduleWeek: 2,
+              playDate: "2099-06-01",
+              teamId: 1,
+              source: "MANUAL",
+            },
+          ],
+          canManage: true,
+          canPublish: true,
+          canEdit: true,
+        },
+      ],
+    }),
     useListTeams: () => ({ data: [{ id: 1, name: "Team A", active: true }] }),
     useCreateTeamBye: () => ({
       mutate: vi.fn(),
@@ -42,7 +69,6 @@ vi.mock("@workspace/api-client-react", async () => {
       isPending: false,
       error: null,
     }),
-    useListGames: () => ({ data: [] }),
     useGetCurrentUser: () => ({ data: { role: "COMMISSIONER" } }),
     useGetDashboard: () => ({
       data: {

@@ -12,4 +12,6 @@ export interface GameInput {
   venueId: number;
   courtId: number;
   scheduledAt: Date;
+  /** @minimum 1 */
+  scheduleWeekId?: number;
 }

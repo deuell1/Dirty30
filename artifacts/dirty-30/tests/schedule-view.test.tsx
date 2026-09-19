@@ -1,16 +1,13 @@
 import React from "react";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import type { Game, Team } from "@workspace/api-client-react";
+import type { Game, ScheduleWeek, Team } from "@workspace/api-client-react";
 import {
   persistWeekSelection,
   ScheduleView,
   statusCounts,
 } from "../src/components/schedule-view";
-import {
-  buildScheduleWeeks,
-  mergeScheduleData,
-} from "../src/components/schedule-helpers";
+import { scheduleWeekGroups } from "../src/components/schedule-helpers";
 import { isSchedulingLocked } from "../src/components/commissioner-game-editor";
 
 vi.mock("wouter", () => ({
@@ -58,13 +55,42 @@ const games = [
     court: "Court 2",
   },
 ] as Game[];
+const scheduleWeeks = [
+  {
+    id: 7,
+    seasonId: 1,
+    seasonName: "Season",
+    weekNumber: 7,
+    playDate: "2099-01-03",
+    startDate: "2099-01-01",
+    endDate: "2099-01-07",
+    games: [games[0]],
+    byes: [],
+    canManage: true,
+    canPublish: true,
+    canEdit: true,
+  },
+  {
+    id: 8,
+    seasonId: 1,
+    seasonName: "Season",
+    weekNumber: 8,
+    playDate: "2099-01-10",
+    startDate: "2099-01-08",
+    endDate: "2099-01-14",
+    games: [games[1]],
+    byes: [],
+    canManage: true,
+    canPublish: true,
+    canEdit: true,
+  },
+] as ScheduleWeek[];
 
 describe("ScheduleView", () => {
   it("opens in the nearest upcoming league week with week navigation and filters", () => {
     const html = renderToString(
       <ScheduleView
-        games={games}
-        byes={[]}
+        scheduleWeeks={scheduleWeeks}
         teams={teams}
         commissioner={false}
       />,
@@ -80,12 +106,11 @@ describe("ScheduleView", () => {
 
   it("shows commissioner week controls and event edits only to commissioners", () => {
     const commissionerHtml = renderToString(
-      <ScheduleView games={games} byes={[]} teams={teams} commissioner />,
+      <ScheduleView scheduleWeeks={scheduleWeeks} teams={teams} commissioner />,
     );
     const playerHtml = renderToString(
       <ScheduleView
-        games={games}
-        byes={[]}
+        scheduleWeeks={scheduleWeeks}
         teams={teams}
         commissioner={false}
       />,
@@ -103,8 +128,7 @@ describe("ScheduleView", () => {
   it("shows stable My Team filters from active memberships", () => {
     const html = renderToString(
       <ScheduleView
-        games={games}
-        byes={[]}
+        scheduleWeeks={scheduleWeeks}
         teams={teams}
         commissioner={false}
         dashboard={
@@ -153,7 +177,7 @@ describe("ScheduleView", () => {
   });
 
   it("reports commissioner status counts for the selected week", () => {
-    const group = buildScheduleWeeks(mergeScheduleData(games, []))[0];
+    const group = scheduleWeekGroups(scheduleWeeks)[0];
     expect(statusCounts(group)).toEqual({
       totalGames: 1,
       completedGames: 0,
@@ -168,8 +192,7 @@ describe("ScheduleView", () => {
     vi.stubGlobal("fetch", fetchSpy);
     const html = renderToString(
       <ScheduleView
-        games={games}
-        byes={[]}
+        scheduleWeeks={scheduleWeeks}
         teams={teams}
         commissioner={false}
       />,
@@ -178,6 +201,8 @@ describe("ScheduleView", () => {
     expect(html).toContain("min-w-0");
     expect(html).toContain("break-words");
     expect(fetchSpy).not.toHaveBeenCalled();
+    expect(html).not.toContain("Legacy Week");
+    expect((html.match(/>Week 7</g) ?? []).length).toBe(1);
     vi.unstubAllGlobals();
   });
 });

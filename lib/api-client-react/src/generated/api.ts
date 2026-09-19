@@ -49,6 +49,7 @@ import type {
   ScheduleGeneratorCommitResult,
   ScheduleGeneratorInput,
   ScheduleGeneratorPreview,
+  ScheduleWeek,
   Score,
   ScoreInput,
   Standing,
@@ -1840,6 +1841,83 @@ export const useCommitScheduleGenerator = <TError = ErrorType<void>,
       > => {
       return useMutation(getCommitScheduleGeneratorMutationOptions(options));
     }
+
+export const getListScheduleWeeksUrl = () => {
+
+
+
+
+  return `/api/schedule/weeks`
+}
+
+/**
+ * @summary List canonical schedule weeks with visible games and byes
+ */
+export const listScheduleWeeks = async ( options?: Parameters<typeof customFetch>[1]): Promise<ScheduleWeek[]> => {
+
+  return customFetch<ScheduleWeek[]>(getListScheduleWeeksUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListScheduleWeeksQueryKey = () => {
+    return [
+    `/api/schedule/weeks`
+    ] as const;
+    }
+
+
+export const getListScheduleWeeksQueryOptions = <TData = Awaited<ReturnType<typeof listScheduleWeeks>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listScheduleWeeks>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListScheduleWeeksQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listScheduleWeeks>>> = ({ signal }) => listScheduleWeeks({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listScheduleWeeks>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListScheduleWeeksQueryResult = NonNullable<Awaited<ReturnType<typeof listScheduleWeeks>>>
+export type ListScheduleWeeksQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List canonical schedule weeks with visible games and byes
+ */
+
+export function useListScheduleWeeks<TData = Awaited<ReturnType<typeof listScheduleWeeks>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listScheduleWeeks>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListScheduleWeeksQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListTeamByesUrl = (params?: ListTeamByesParams,) => {
   const normalizedParams = new URLSearchParams();

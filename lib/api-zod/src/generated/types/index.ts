@@ -51,6 +51,7 @@ export * from './scheduleGeneratorPreviewByesItem';
 export * from './scheduleGeneratorPreviewFormat';
 export * from './scheduleGeneratorPreviewGamesPerTeam';
 export * from './scheduleGeneratorPreviewHomeAway';
+export * from './scheduleWeek';
 export * from './score';
 export * from './scoreInput';
 export * from './scoreStatus';

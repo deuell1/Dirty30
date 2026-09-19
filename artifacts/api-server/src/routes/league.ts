@@ -31,6 +31,7 @@ import {
   DeleteTeamByeQueryParams,
   ListTeamByesQueryParams,
   ListTeamByesResponse,
+  ListScheduleWeeksResponse,
   PreviewByeReconciliationResponse,
   PreviewScheduleGeneratorBody,
   PreviewScheduleGeneratorResponse,
@@ -49,12 +50,14 @@ import {
   leagues,
   playerInvitations,
   seasons,
+  scheduleWeeks,
   teamMemberships,
   teams,
   teamByes,
   users,
   venues,
   type User,
+  type ScheduleWeek,
 } from "@workspace/db";
 import {
   currentUser,
@@ -81,9 +84,11 @@ import {
   type GeneratorExistingGame,
   type ScheduleGeneratorInput,
 } from "../services/schedule-generator";
+import { ensureScheduleWeek } from "../services/schedule-weeks";
 
 type ApiGame = {
   id: number;
+  scheduleWeekId: number | null;
   scheduleWeek: number | null;
   date: string;
   startTime: string;
@@ -124,6 +129,7 @@ const scheduleInput = z.object({
   venueId: z.number().int().positive(),
   courtId: z.number().int().positive(),
   scheduledAt: z.string().datetime(),
+  scheduleWeekId: z.number().int().positive().optional(),
 });
 const inviteInput = z.object({ phone: z.string().trim().min(1).max(40) });
 const disputeInput = z.object({ reason: z.string().trim().min(3).max(1000) });
@@ -311,6 +317,13 @@ async function apiGames(
     .from(teams)
     .where(eq(teams.seasonId, season.id));
   const byId = new Map(allTeams.map((team) => [team.id, team]));
+  const canonicalWeeks: ScheduleWeek[] = await database
+    .select()
+    .from(scheduleWeeks)
+    .where(eq(scheduleWeeks.seasonId, season.id));
+  const weekById = new Map<number, ScheduleWeek>(
+    canonicalWeeks.map((week) => [week.id, week]),
+  );
   const captainMemberships: Array<typeof teamMemberships.$inferSelect> =
     viewer?.role === "COMMISSIONER"
       ? []
@@ -370,7 +383,11 @@ async function apiGames(
         opposingTeamId !== undefined && captainTeamIds.has(opposingTeamId);
       return {
         id: game.id,
-        scheduleWeek: game.scheduleWeek,
+        scheduleWeekId: game.scheduleWeekId,
+        scheduleWeek:
+          (game.scheduleWeekId
+            ? weekById.get(game.scheduleWeekId)?.weekNumber
+            : undefined) ?? game.scheduleWeek,
         ...parts,
         venue: venue.name,
         court: court.name,
@@ -462,6 +479,7 @@ async function validateGameInput(
   input: z.infer<typeof scheduleInput>,
   excludeGameId?: number,
   scheduleWeek?: number | null,
+  defaultScheduleWeekId?: number | null,
 ) {
   const [seasonRows, leagueRows] = await Promise.all([
     tx.select().from(seasons).where(eq(seasons.active, true)).limit(1),
@@ -493,6 +511,26 @@ async function validateGameInput(
     throw Object.assign(new Error("A team cannot play itself"), {
       status: 422,
     });
+  const intendedScheduleWeekId =
+    input.scheduleWeekId ?? defaultScheduleWeekId ?? undefined;
+  const canonicalWeek = intendedScheduleWeekId
+    ? (
+        await tx
+          .select()
+          .from(scheduleWeeks)
+          .where(eq(scheduleWeeks.seasonId, season.id))
+      ).find((week: ScheduleWeek) => week.id === intendedScheduleWeekId)
+    : await ensureScheduleWeek(tx, season.id, localDate, scheduleWeek);
+  if (!canonicalWeek)
+    throw Object.assign(
+      new Error("Selected schedule week is not in the active season"),
+      { status: 422 },
+    );
+  if (canonicalWeek.startDate > localDate || canonicalWeek.endDate < localDate)
+    throw Object.assign(
+      new Error("Game date must be within the selected schedule week"),
+      { status: 422 },
+    );
   const [homeRows, awayRows, venueRows, courtRows] = await Promise.all([
     tx
       .select()
@@ -550,24 +588,22 @@ async function validateGameInput(
       new Error("Teams, venue, and court must be active in the current league"),
       { status: 422 },
     );
-  if (scheduleWeek !== null && scheduleWeek !== undefined) {
-    const byeConflict = await tx
-      .select({ id: teamByes.id })
-      .from(teamByes)
-      .where(
-        and(
-          eq(teamByes.seasonId, season.id),
-          eq(teamByes.scheduleWeek, scheduleWeek),
-          inArray(teamByes.teamId, [input.homeTeamId, input.awayTeamId]),
-        ),
-      )
-      .limit(1);
-    if (byeConflict.length)
-      throw Object.assign(
-        new Error("A team cannot have a game and bye in the same week"),
-        { status: 409 },
-      );
-  }
+  const byeConflict = await tx
+    .select({ id: teamByes.id })
+    .from(teamByes)
+    .where(
+      and(
+        eq(teamByes.seasonId, season.id),
+        eq(teamByes.scheduleWeekId, canonicalWeek.id),
+        inArray(teamByes.teamId, [input.homeTeamId, input.awayTeamId]),
+      ),
+    )
+    .limit(1);
+  if (byeConflict.length)
+    throw Object.assign(
+      new Error("A team cannot have a game and bye in the same week"),
+      { status: 409 },
+    );
   const endsAt = new Date(startsAt.getTime() + 90 * 60_000);
   const conflicting = await tx
     .select({ id: games.id })
@@ -591,7 +627,7 @@ async function validateGameInput(
       new Error("A team or court is already scheduled during this game window"),
       { status: 409 },
     );
-  return season;
+  return { season, canonicalWeek };
 }
 async function withScheduleMutationLock<T>(
   operation: (tx: ScheduleTransaction) => Promise<T>,
@@ -783,6 +819,13 @@ async function validateGeneratedByePlan(
     .select()
     .from(teamByes)
     .where(eq(teamByes.seasonId, seasonId));
+  const canonical = await database
+    .select()
+    .from(scheduleWeeks)
+    .where(eq(scheduleWeeks.seasonId, seasonId));
+  const numberById = new Map<number, number>(
+    canonical.map((week: ScheduleWeek) => [week.id, week.weekNumber]),
+  );
   const plannedByes = new Map(
     generated.byes.map((bye) => [
       `${bye.teamId}:${bye.scheduleWeek}`,
@@ -790,11 +833,19 @@ async function validateGeneratedByePlan(
     ]),
   );
   for (const bye of existing) {
-    const key = `${bye.teamId}:${bye.scheduleWeek}`;
+    const canonicalNumber = bye.scheduleWeekId
+      ? numberById.get(bye.scheduleWeekId)
+      : undefined;
+    if (canonicalNumber === undefined)
+      throw Object.assign(
+        new Error(`Existing bye ${bye.id} is not linked to a schedule week`),
+        { status: 409 },
+      );
+    const key = `${bye.teamId}:${canonicalNumber}`;
     const plannedDate = plannedByes.get(key);
     const hasGame = generated.games.some(
       (game) =>
-        game.scheduleWeek === bye.scheduleWeek &&
+        game.scheduleWeek === canonicalNumber &&
         (game.homeTeamId === bye.teamId || game.awayTeamId === bye.teamId),
     );
     if (plannedDate !== bye.playDate || hasGame)
@@ -1167,6 +1218,13 @@ router.get("/dashboard", async (_req, res, next) => {
           game.status === "PENDING_CONFIRMATION" ||
           game.status === "DISPUTED"),
     );
+    const canonicalWeeks = await db
+      .select()
+      .from(scheduleWeeks)
+      .where(eq(scheduleWeeks.seasonId, season.id));
+    const weekNumberById = new Map<number, number>(
+      canonicalWeeks.map((week) => [week.id, week.weekNumber]),
+    );
     const byeRows = viewerTeamIds.length
       ? await db
           .select({ bye: teamByes, team: teams })
@@ -1178,13 +1236,13 @@ router.get("/dashboard", async (_req, res, next) => {
               inArray(teamByes.teamId, viewerTeamIds),
             ),
           )
-          .orderBy(asc(teamByes.playDate), asc(teamByes.scheduleWeek))
+          .orderBy(asc(teamByes.playDate), asc(teamByes.scheduleWeekId))
       : [];
     const nextBye =
       byeRows.find(({ bye }) => {
         if (bye.source !== "GENERATED") return true;
         return visibleGames.some(
-          (game) => game.scheduleWeek === bye.scheduleWeek,
+          (game) => game.scheduleWeekId === bye.scheduleWeekId,
         );
       }) ?? null;
     const attentionItems = [
@@ -1209,7 +1267,7 @@ router.get("/dashboard", async (_req, res, next) => {
               seasonId: nextBye.bye.seasonId,
               teamId: nextBye.bye.teamId,
               teamName: nextBye.team.name,
-              scheduleWeek: nextBye.bye.scheduleWeek,
+              scheduleWeek: weekNumberById.get(nextBye.bye.scheduleWeekId!)!,
               playDate: nextBye.bye.playDate,
               source: nextBye.bye.source,
             }
@@ -1962,11 +2020,86 @@ router.get("/schedule", async (req, res, next) => {
     next(error);
   }
 });
+router.get("/schedule/weeks", async (req, res, next) => {
+  try {
+    const user = currentUser(req, res);
+    const season = await activeSeason();
+    const weeks = await db
+      .select({ week: scheduleWeeks, seasonName: seasons.name })
+      .from(scheduleWeeks)
+      .innerJoin(seasons, eq(scheduleWeeks.seasonId, seasons.id))
+      .where(eq(scheduleWeeks.seasonId, season.id))
+      .orderBy(asc(scheduleWeeks.weekNumber));
+    const allGames = await apiGames(undefined, undefined, user);
+    const rawByes = await db
+      .select({ bye: teamByes, team: teams })
+      .from(teamByes)
+      .innerJoin(teams, eq(teamByes.teamId, teams.id))
+      .where(eq(teamByes.seasonId, season.id))
+      .orderBy(asc(teamByes.playDate));
+    const visibleGames =
+      user.role === "COMMISSIONER"
+        ? allGames
+        : allGames.filter((game) => game.published);
+    const visibleByes = rawByes.filter(({ bye }) => {
+      if (user.role === "COMMISSIONER" || bye.source !== "GENERATED")
+        return true;
+      return visibleGames.some(
+        (game) => game.scheduleWeekId === bye.scheduleWeekId,
+      );
+    });
+    const aggregates = weeks.map(({ week, seasonName }) => ({
+      id: week.id,
+      seasonId: week.seasonId,
+      seasonName,
+      weekNumber: week.weekNumber,
+      playDate: week.playDate,
+      startDate: week.startDate,
+      endDate: week.endDate,
+      games: visibleGames.filter((game) => game.scheduleWeekId === week.id),
+      byes: visibleByes
+        .filter(({ bye }) => bye.scheduleWeekId === week.id)
+        .map(({ bye, team }) => ({
+          id: bye.id,
+          seasonId: bye.seasonId,
+          teamId: bye.teamId,
+          teamName: team.name,
+          scheduleWeek: week.weekNumber,
+          playDate: bye.playDate,
+          source: bye.source,
+        })),
+      canManage: user.role === "COMMISSIONER",
+      canPublish: user.role === "COMMISSIONER",
+      canEdit: user.role === "COMMISSIONER",
+    }));
+    return res.json(
+      ListScheduleWeeksResponse.parse(
+        user.role === "COMMISSIONER"
+          ? aggregates
+          : aggregates.filter(
+              (week) => week.games.length > 0 || week.byes.length > 0,
+            ),
+      ),
+    );
+  } catch (error) {
+    return next(error);
+  }
+});
 router.get("/schedule/byes", async (req, res, next) => {
   try {
     const filters = ListTeamByesQueryParams.parse(req.query);
     const user = currentUser(req, res);
     const season = await activeSeason();
+    const canonical = await db
+      .select()
+      .from(scheduleWeeks)
+      .where(eq(scheduleWeeks.seasonId, season.id));
+    const numberById = new Map<number, number>(
+      canonical.map((week) => [week.id, week.weekNumber]),
+    );
+    const filterWeekId = filters.scheduleWeek
+      ? canonical.find((week) => week.weekNumber === filters.scheduleWeek)?.id
+      : undefined;
     const rows = await db
       .select({ bye: teamByes, team: teams })
       .from(teamByes)
@@ -1975,9 +2108,7 @@ router.get("/schedule/byes", async (req, res, next) => {
         and(
           eq(teamByes.seasonId, season.id),
           filters.teamId ? eq(teamByes.teamId, filters.teamId) : undefined,
-          filters.scheduleWeek
-            ? eq(teamByes.scheduleWeek, filters.scheduleWeek)
-            : undefined,
+          filterWeekId ? eq(teamByes.scheduleWeekId, filterWeekId) : undefined,
         ),
       )
       .orderBy(asc(teamByes.scheduleWeek), asc(teamByes.playDate));
@@ -1986,11 +2117,16 @@ router.get("/schedule/byes", async (req, res, next) => {
       .from(games)
       .where(and(eq(games.seasonId, season.id), ne(games.status, "CANCELLED")));
     const visible = rows.filter(({ bye }) => {
+      if (
+        filters.scheduleWeek &&
+        (filterWeekId === undefined || bye.scheduleWeekId !== filterWeekId)
+      )
+        return false;
       if (user.role === "COMMISSIONER" || bye.source !== "GENERATED")
         return true;
       return activeGames.some(
         (game) =>
-          game.scheduleWeek === bye.scheduleWeek &&
+          game.scheduleWeekId === bye.scheduleWeekId &&
           (game.status === "PUBLISHED" ||
             game.status === "FINAL" ||
             game.status === "PENDING_CONFIRMATION" ||
@@ -1999,15 +2135,17 @@ router.get("/schedule/byes", async (req, res, next) => {
     });
     return res.json(
       ListTeamByesResponse.parse(
-        visible.map(({ bye, team }) => ({
-          id: bye.id,
-          seasonId: bye.seasonId,
-          teamId: bye.teamId,
-          teamName: team.name,
-          scheduleWeek: bye.scheduleWeek,
-          playDate: bye.playDate,
-          source: bye.source,
-        })),
+        visible
+          .filter(({ bye }) => bye.scheduleWeekId != null)
+          .map(({ bye, team }) => ({
+            id: bye.id,
+            seasonId: bye.seasonId,
+            teamId: bye.teamId,
+            teamName: team.name,
+            scheduleWeek: numberById.get(bye.scheduleWeekId!)!,
+            playDate: bye.playDate,
+            source: bye.source,
+          })),
       ),
     );
   } catch (error) {
@@ -2046,6 +2184,12 @@ router.post("/schedule/byes", requireCommissioner, async (req, res, next) => {
             status: 422,
           },
         );
+      const canonicalWeek = await ensureScheduleWeek(
+        tx,
+        season.id,
+        input.playDate,
+        input.scheduleWeek,
+      );
       const [conflict] = await tx
         .select({ id: games.id })
         .from(games)
@@ -2053,7 +2197,7 @@ router.post("/schedule/byes", requireCommissioner, async (req, res, next) => {
           and(
             eq(games.seasonId, season.id),
             ne(games.status, "CANCELLED"),
-            eq(games.scheduleWeek, input.scheduleWeek),
+            eq(games.scheduleWeekId, canonicalWeek.id),
             or(
               eq(games.homeTeamId, input.teamId),
               eq(games.awayTeamId, input.teamId),
@@ -2072,7 +2216,7 @@ router.post("/schedule/byes", requireCommissioner, async (req, res, next) => {
           and(
             eq(teamByes.seasonId, season.id),
             eq(teamByes.teamId, input.teamId),
-            eq(teamByes.scheduleWeek, input.scheduleWeek),
+            eq(teamByes.scheduleWeekId, canonicalWeek.id),
           ),
         )
         .limit(1);
@@ -2092,7 +2236,8 @@ router.post("/schedule/byes", requireCommissioner, async (req, res, next) => {
         .values({
           seasonId: season.id,
           teamId: input.teamId,
-          scheduleWeek: input.scheduleWeek,
+          scheduleWeek: canonicalWeek.weekNumber,
+          scheduleWeekId: canonicalWeek.id,
           playDate: input.playDate,
           source: "MANUAL",
           createdByUserId: actor.id,
@@ -2133,6 +2278,13 @@ router.delete("/schedule/byes", requireCommissioner, async (req, res, next) => {
         throw Object.assign(new Error("No active season configured"), {
           status: 409,
         });
+      const canonicalWeek = (
+        await tx
+          .select()
+          .from(scheduleWeeks)
+          .where(eq(scheduleWeeks.seasonId, season.id))
+      ).find((week: ScheduleWeek) => week.weekNumber === scheduleWeek);
+      if (!canonicalWeek) return;
       const [bye] = await tx
         .select()
         .from(teamByes)
@@ -2140,7 +2292,7 @@ router.delete("/schedule/byes", requireCommissioner, async (req, res, next) => {
           and(
             eq(teamByes.seasonId, season.id),
             eq(teamByes.teamId, teamId),
-            eq(teamByes.scheduleWeek, scheduleWeek),
+            eq(teamByes.scheduleWeekId, canonicalWeek.id),
           ),
         )
         .limit(1);
@@ -2176,19 +2328,36 @@ router.post(
         .from(teams)
         .where(and(eq(teams.seasonId, season.id), eq(teams.active, true)))
         .orderBy(asc(teams.id));
+      const canonical = await db
+        .select()
+        .from(scheduleWeeks)
+        .where(eq(scheduleWeeks.seasonId, season.id));
+      const numberById = new Map<number, number>(
+        canonical.map((week) => [week.id, week.weekNumber]),
+      );
+      const existingByes = await db
+        .select({
+          teamId: teamByes.teamId,
+          scheduleWeekId: teamByes.scheduleWeekId,
+          playDate: teamByes.playDate,
+        })
+        .from(teamByes)
+        .where(eq(teamByes.seasonId, season.id));
       const result = reconciliationPreview(
         season.id,
         activeTeams,
         await apiGames(undefined, undefined, user),
         undefined,
-        await db
-          .select({
-            teamId: teamByes.teamId,
-            scheduleWeek: teamByes.scheduleWeek,
-            playDate: teamByes.playDate,
-          })
-          .from(teamByes)
-          .where(eq(teamByes.seasonId, season.id)),
+        existingByes
+          .filter(
+            (bye) =>
+              bye.scheduleWeekId != null && numberById.has(bye.scheduleWeekId),
+          )
+          .map((bye) => ({
+            teamId: bye.teamId,
+            scheduleWeek: numberById.get(bye.scheduleWeekId!)!,
+            playDate: bye.playDate,
+          })),
       );
       return res.json(PreviewByeReconciliationResponse.parse(result));
     } catch (error) {
@@ -2237,10 +2406,17 @@ router.post(
           .where(and(eq(teams.seasonId, season.id), eq(teams.active, true)))
           .orderBy(asc(teams.id));
         const currentGames = await apiGames(undefined, undefined, actor, tx);
+        const canonical = await tx
+          .select()
+          .from(scheduleWeeks)
+          .where(eq(scheduleWeeks.seasonId, season.id));
+        const numberById = new Map<number, number>(
+          canonical.map((week) => [week.id, week.weekNumber]),
+        );
         const currentByes = await tx
           .select({
             teamId: teamByes.teamId,
-            scheduleWeek: teamByes.scheduleWeek,
+            scheduleWeekId: teamByes.scheduleWeekId,
             playDate: teamByes.playDate,
           })
           .from(teamByes)
@@ -2250,7 +2426,17 @@ router.post(
           activeTeams,
           currentGames,
           undefined,
-          currentByes,
+          currentByes
+            .filter(
+              (bye) =>
+                bye.scheduleWeekId != null &&
+                numberById.has(bye.scheduleWeekId),
+            )
+            .map((bye) => ({
+              teamId: bye.teamId,
+              scheduleWeek: numberById.get(bye.scheduleWeekId!)!,
+              playDate: bye.playDate,
+            })),
         );
         if (analysis.previewHash !== input.previewHash)
           throw Object.assign(
@@ -2270,9 +2456,18 @@ router.post(
         for (const week of analysis.weeks) {
           for (const game of week.games) {
             if (game.scheduleWeek === null) {
+              const canonicalWeek = await ensureScheduleWeek(
+                tx,
+                season.id,
+                game.date,
+                week.scheduleWeek,
+              );
               await tx
                 .update(games)
-                .set({ scheduleWeek: week.scheduleWeek })
+                .set({
+                  scheduleWeek: canonicalWeek.weekNumber,
+                  scheduleWeekId: canonicalWeek.id,
+                })
                 .where(eq(games.id, game.id));
               updatedGames += 1;
             } else if (game.scheduleWeek !== week.scheduleWeek) {
@@ -2283,6 +2478,12 @@ router.post(
             }
           }
           for (const bye of week.byes) {
+            const canonicalWeek = await ensureScheduleWeek(
+              tx,
+              season.id,
+              bye.playDate,
+              bye.scheduleWeek,
+            );
             const [existing] = await tx
               .select()
               .from(teamByes)
@@ -2290,7 +2491,7 @@ router.post(
                 and(
                   eq(teamByes.seasonId, season.id),
                   eq(teamByes.teamId, bye.teamId),
-                  eq(teamByes.scheduleWeek, bye.scheduleWeek),
+                  eq(teamByes.scheduleWeekId, canonicalWeek.id),
                 ),
               )
               .limit(1);
@@ -2298,7 +2499,8 @@ router.post(
             await tx.insert(teamByes).values({
               seasonId: season.id,
               teamId: bye.teamId,
-              scheduleWeek: bye.scheduleWeek,
+              scheduleWeek: canonicalWeek.weekNumber,
+              scheduleWeekId: canonicalWeek.id,
               playDate: bye.playDate,
               source: "RECONCILED",
               createdByUserId: actor.id,
@@ -2401,12 +2603,18 @@ router.post(
             courtId: planned.courtId,
             scheduledAt: planned.scheduledAt,
           };
-          const season = await validateGameInput(tx, schedule);
+          const { season, canonicalWeek: week } = await validateGameInput(
+            tx,
+            schedule,
+            undefined,
+            planned.scheduleWeek,
+          );
           const draftValues = {
             ...schedule,
             seasonId: season.id,
             scheduledAt: new Date(schedule.scheduledAt),
-            scheduleWeek: planned.scheduleWeek,
+            scheduleWeek: week.weekNumber,
+            scheduleWeekId: week.id,
             status: "DRAFT",
           } satisfies typeof games.$inferInsert;
           const [game] = await tx.insert(games).values(draftValues).returning();
@@ -2414,6 +2622,12 @@ router.post(
           created.push(game);
         }
         for (const bye of generated.byes) {
+          const week = await ensureScheduleWeek(
+            tx,
+            context.season.id,
+            bye.playDate,
+            bye.scheduleWeek,
+          );
           const [conflict] = await tx
             .select({ id: games.id })
             .from(games)
@@ -2421,7 +2635,7 @@ router.post(
               and(
                 eq(games.seasonId, context.season.id),
                 ne(games.status, "CANCELLED"),
-                eq(games.scheduleWeek, bye.scheduleWeek),
+                eq(games.scheduleWeekId, week.id),
                 or(
                   eq(games.homeTeamId, bye.teamId),
                   eq(games.awayTeamId, bye.teamId),
@@ -2441,7 +2655,7 @@ router.post(
               and(
                 eq(teamByes.seasonId, context.season.id),
                 eq(teamByes.teamId, bye.teamId),
-                eq(teamByes.scheduleWeek, bye.scheduleWeek),
+                eq(teamByes.scheduleWeekId, week.id),
               ),
             )
             .limit(1);
@@ -2456,7 +2670,8 @@ router.post(
           await tx.insert(teamByes).values({
             seasonId: context.season.id,
             teamId: bye.teamId,
-            scheduleWeek: bye.scheduleWeek,
+            scheduleWeek: week.weekNumber,
+            scheduleWeekId: week.id,
             playDate: bye.playDate,
             source: "GENERATED",
             createdByUserId: actor.id,
@@ -2506,7 +2721,10 @@ router.post("/schedule", requireCommissioner, async (req, res, next) => {
   try {
     const input = scheduleInput.parse(req.body);
     const game = await withScheduleMutationLock(async (tx) => {
-      const season = await validateGameInput(tx, input);
+      const { season, canonicalWeek: week } = await validateGameInput(
+        tx,
+        input,
+      );
       return (
         await tx
           .insert(games)
@@ -2514,6 +2732,8 @@ router.post("/schedule", requireCommissioner, async (req, res, next) => {
             ...input,
             seasonId: season.id,
             scheduledAt: new Date(input.scheduledAt),
+            scheduleWeek: week.weekNumber,
+            scheduleWeekId: week.id,
             status: "DRAFT",
           })
           .returning()
@@ -2556,10 +2776,21 @@ router.patch(
             new Error("Only draft or published games can be edited"),
             { status: 409 },
           );
-        await validateGameInput(tx, input, gameId, before.scheduleWeek);
+        const { canonicalWeek: week } = await validateGameInput(
+          tx,
+          input,
+          gameId,
+          undefined,
+          before.scheduleWeekId,
+        );
         const [game] = await tx
           .update(games)
-          .set({ ...input, scheduledAt: new Date(input.scheduledAt) })
+          .set({
+            ...input,
+            scheduledAt: new Date(input.scheduledAt),
+            scheduleWeek: week.weekNumber,
+            scheduleWeekId: week.id,
+          })
           .where(eq(games.id, gameId))
           .returning();
         return { before, game: game! };

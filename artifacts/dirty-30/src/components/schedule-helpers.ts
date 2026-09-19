@@ -1,4 +1,9 @@
-import type { Dashboard, Game, TeamBye } from "@workspace/api-client-react";
+import type {
+  Dashboard,
+  Game,
+  ScheduleWeek,
+  TeamBye,
+} from "@workspace/api-client-react";
 
 export type ScheduleItem =
   | {
@@ -19,6 +24,7 @@ export type ScheduleItem =
 export type ScheduleMode = "Week" | "Upcoming" | "Completed" | "All";
 
 export type ScheduleWeekGroup = {
+  id: number;
   key: string;
   scheduleWeek: number | null;
   label: string;
@@ -26,39 +32,32 @@ export type ScheduleWeekGroup = {
   endDate: string;
   dates: string[];
   items: ScheduleItem[];
-  isLegacy: boolean;
 };
-
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 export function inferUserTeamIds(dashboard?: Dashboard): number[] {
   if (!dashboard || dashboard.role === "COMMISSIONER") return [];
   return dashboard.myTeams.map((team) => team.teamId);
 }
 
-export function mergeScheduleData(
-  games: Game[],
-  byes: TeamBye[],
-): ScheduleItem[] {
-  return [
-    ...games.map((game) => ({
-      type: "game" as const,
-      week:
-        typeof game.scheduleWeek === "number" && game.scheduleWeek > 0
-          ? game.scheduleWeek
-          : null,
-      date: game.date,
-      time: game.startTime,
-      data: game,
-    })),
-    ...byes.map((bye) => ({
-      type: "bye" as const,
-      week: bye.scheduleWeek,
-      date: bye.playDate,
-      time: "00:00",
-      data: bye,
-    })),
-  ].sort(compareItems);
+export function mergeScheduleData(weeks: ScheduleWeek[]): ScheduleItem[] {
+  return weeks
+    .flatMap((week) => [
+      ...week.games.map((game) => ({
+        type: "game" as const,
+        week: week.weekNumber,
+        date: game.date,
+        time: game.startTime,
+        data: game,
+      })),
+      ...week.byes.map((bye) => ({
+        type: "bye" as const,
+        week: week.weekNumber,
+        date: bye.playDate,
+        time: "00:00",
+        data: bye,
+      })),
+    ])
+    .sort(compareItems);
 }
 
 function compareItems(a: ScheduleItem, b: ScheduleItem) {
@@ -111,65 +110,31 @@ export function filterByDate(items: ScheduleItem[], date: string | "all") {
   return date === "all" ? items : items.filter((item) => item.date === date);
 }
 
-export function startOfCalendarWeek(date: string) {
-  if (!ISO_DATE.test(date)) return date;
-  const value = new Date(`${date}T12:00:00Z`);
-  const mondayOffset = (value.getUTCDay() + 6) % 7;
-  value.setUTCDate(value.getUTCDate() - mondayOffset);
-  return value.toISOString().slice(0, 10);
-}
-
-export function endOfCalendarWeek(date: string) {
-  const value = new Date(`${startOfCalendarWeek(date)}T12:00:00Z`);
-  value.setUTCDate(value.getUTCDate() + 6);
-  return value.toISOString().slice(0, 10);
-}
-
-export function buildScheduleWeeks(items: ScheduleItem[]): ScheduleWeekGroup[] {
-  const groups = new Map<string, ScheduleWeekGroup>();
-
-  for (const item of items) {
-    if (!ISO_DATE.test(item.date)) continue;
-    const explicitWeek = item.week != null && item.week > 0;
-    const calendarStart = startOfCalendarWeek(item.date);
-    const key = explicitWeek ? `week:${item.week}` : `legacy:${calendarStart}`;
-    const existing = groups.get(key);
-    if (existing) {
-      existing.items.push(item);
-      existing.dates = Array.from(
-        new Set([...existing.dates, item.date]),
-      ).sort();
-      existing.startDate =
-        item.date < existing.startDate ? item.date : existing.startDate;
-      existing.endDate =
-        item.date > existing.endDate ? item.date : existing.endDate;
-      continue;
-    }
-
-    groups.set(key, {
-      key,
-      scheduleWeek: explicitWeek ? item.week : null,
-      label: explicitWeek ? `Week ${item.week}` : "Legacy week",
-      startDate: item.date,
-      endDate: item.date,
-      dates: [item.date],
-      items: [item],
-      isLegacy: !explicitWeek,
-    });
+/** Build display groups from the API's canonical weeks, never from event dates. */
+export function scheduleWeekGroups(
+  weeks: ScheduleWeek[],
+  items?: ScheduleItem[],
+): ScheduleWeekGroup[] {
+  const byWeek = new Map<number, ScheduleItem[]>();
+  for (const item of items ?? mergeScheduleData(weeks)) {
+    if (item.week == null) continue;
+    byWeek.set(item.week, [...(byWeek.get(item.week) ?? []), item]);
   }
-
-  return Array.from(groups.values())
-    .map((group) => ({
-      ...group,
-      items: [...group.items].sort(compareItems),
-      dates: [...group.dates].sort(),
-    }))
-    .sort((a, b) => {
-      if (a.startDate !== b.startDate)
-        return a.startDate.localeCompare(b.startDate);
-      if (a.scheduleWeek !== null && b.scheduleWeek !== null)
-        return a.scheduleWeek - b.scheduleWeek;
-      return a.key.localeCompare(b.key);
+  return [...weeks]
+    .sort((a, b) => a.weekNumber - b.weekNumber)
+    .map((week) => {
+      const weekItems = (byWeek.get(week.weekNumber) ?? []).sort(compareItems);
+      const dates = [...new Set(weekItems.map((item) => item.date))].sort();
+      return {
+        id: week.id,
+        key: `week:${week.weekNumber}`,
+        scheduleWeek: week.weekNumber,
+        label: `Week ${week.weekNumber}`,
+        startDate: week.startDate,
+        endDate: week.endDate,
+        dates,
+        items: weekItems,
+      };
     });
 }
 
@@ -179,14 +144,10 @@ export function selectCurrentScheduleWeek(
 ) {
   if (groups.length === 0) return null;
   const current = groups.find(
-    (group) =>
-      startOfCalendarWeek(group.startDate) <= today &&
-      endOfCalendarWeek(group.endDate) >= today,
+    (group) => group.startDate <= today && group.endDate >= today,
   );
   if (current) return current.key;
-  const upcoming = groups.find(
-    (group) => startOfCalendarWeek(group.startDate) > today,
-  );
+  const upcoming = groups.find((group) => group.startDate > today);
   return upcoming?.key ?? groups[groups.length - 1].key;
 }
 
@@ -218,16 +179,4 @@ export function formatWeekRange(group: ScheduleWeekGroup) {
     return formatLeagueDate(group.startDate);
   }
   return `${formatLeagueDate(group.startDate)} – ${formatLeagueDate(group.endDate)}`;
-}
-
-export function groupScheduleItems(items: ScheduleItem[], today: string) {
-  return buildScheduleWeeks(items).flatMap((week) =>
-    week.dates.map((date) => ({
-      week: week.scheduleWeek ?? 999,
-      dateStr: formatLeagueDate(date, true),
-      rawDate: date,
-      items: week.items.filter((item) => item.date === date),
-      isHistorical: date < today,
-    })),
-  );
 }

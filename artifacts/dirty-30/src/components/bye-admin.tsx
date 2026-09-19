@@ -1,19 +1,21 @@
 import { useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  useListTeamByes,
   useCreateTeamBye,
   useDeleteTeamBye,
   usePreviewByeReconciliation,
   useCommitByeReconciliation,
   useListTeams,
+  useListScheduleWeeks,
   getListTeamByesQueryKey,
   getListGamesQueryKey,
   getGetDashboardQueryKey,
+  getListScheduleWeeksQueryKey,
   TeamByeSource,
   type TeamBye,
   type ByeReconciliationPreview,
   type Team,
+  type ScheduleWeek,
 } from "@workspace/api-client-react";
 import { AlertTriangle, Check, ShieldAlert, Trash2 } from "lucide-react";
 
@@ -34,15 +36,16 @@ const actionButton =
 
 export function ByeWeekAdmin() {
   const client = useQueryClient();
-  const byesQuery = useListTeamByes();
   const teamsQuery = useListTeams();
+  const scheduleWeeksQuery = useListScheduleWeeks();
   const createBye = useCreateTeamBye();
   const deleteBye = useDeleteTeamBye();
   const previewReconciliation = usePreviewByeReconciliation();
   const commitReconciliation = useCommitByeReconciliation();
 
-  const byes = (byesQuery.data ?? []) as TeamBye[];
   const teams = (teamsQuery.data ?? []) as Team[];
+  const scheduleWeeks = (scheduleWeeksQuery.data ?? []) as ScheduleWeek[];
+  const byes = scheduleWeeks.flatMap((week) => week.byes) as TeamBye[];
   const activeTeams = teams.filter((t) => t.active);
 
   const [previewData, setPreviewData] =
@@ -56,30 +59,32 @@ export function ByeWeekAdmin() {
 
   const [formTeamId, setFormTeamId] = useState("");
   const [formScheduleWeek, setFormScheduleWeek] = useState("");
-  const [formPlayDate, setFormPlayDate] = useState("");
 
   const refreshQueries = () => {
     void client.invalidateQueries({ queryKey: getListTeamByesQueryKey() });
     void client.invalidateQueries({ queryKey: getListGamesQueryKey() });
     void client.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+    void client.invalidateQueries({ queryKey: getListScheduleWeeksQueryKey() });
   };
 
   const handleCreateBye = (e: FormEvent) => {
     e.preventDefault();
-    if (!formTeamId || !formScheduleWeek || !formPlayDate) return;
+    const selectedWeek = scheduleWeeks.find(
+      (week) => week.weekNumber === Number(formScheduleWeek),
+    );
+    if (!formTeamId || !selectedWeek) return;
     createBye.mutate(
       {
         data: {
           teamId: Number(formTeamId),
           scheduleWeek: Number(formScheduleWeek),
-          playDate: formPlayDate,
+          playDate: selectedWeek.playDate,
         },
       },
       {
         onSuccess: () => {
           setFormTeamId("");
           setFormScheduleWeek("");
-          setFormPlayDate("");
           refreshQueries();
         },
       },
@@ -325,33 +330,31 @@ export function ByeWeekAdmin() {
                 </select>
               </label>
               <label className="text-xs font-bold">
-                Schedule Week
-                <input
-                  type="number"
-                  min="1"
+                Canonical Schedule Week
+                <select
                   value={formScheduleWeek}
                   onChange={(e) => setFormScheduleWeek(e.target.value)}
                   className={fieldClass}
-                  placeholder="1"
-                />
+                >
+                  <option value="">Select week</option>
+                  {scheduleWeeks.map((week) => (
+                    <option key={week.id} value={week.weekNumber}>
+                      Week {week.weekNumber} · {week.playDate}
+                    </option>
+                  ))}
+                </select>
               </label>
             </div>
-            <label className="text-xs font-bold">
-              Play Date
-              <input
-                type="date"
-                value={formPlayDate}
-                onChange={(e) => setFormPlayDate(e.target.value)}
-                className={fieldClass}
-              />
-            </label>
+            <p className="text-xs text-[hsl(var(--muted-foreground))]">
+              Play date is taken from the selected canonical week.
+            </p>
             <button
               type="submit"
               disabled={
                 createBye.isPending ||
                 !formTeamId ||
                 !formScheduleWeek ||
-                !formPlayDate
+                !formScheduleWeek
               }
               className={`w-full sm:w-auto ${actionButton} mt-1`}
             >

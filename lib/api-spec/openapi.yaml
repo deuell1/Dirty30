@@ -400,6 +400,19 @@ paths:
                 $ref: "#/components/schemas/ScheduleGeneratorCommitResult"
         "409":
           description: Schedule capacity, conflict, or duplicate error
+  /schedule/weeks:
+    get:
+      operationId: listScheduleWeeks
+      tags: [schedule]
+      summary: List canonical schedule weeks with visible games and byes
+      responses:
+        "200":
+          description: Ordered schedule week aggregates
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ScheduleWeek" }
   /schedule/byes:
     get:
       operationId: listTeamByes
@@ -906,6 +919,7 @@ components:
         venueId: { type: integer }
         courtId: { type: integer }
         scheduledAt: { type: string, format: date-time }
+        scheduleWeekId: { type: integer, minimum: 1 }
     ScheduleGeneratorInput:
       type: object
       required: [format, venueId, courtIds, firstPlayDate, weekdays, timeSlots]
@@ -1030,6 +1044,40 @@ components:
         scheduleWeek: { type: integer, minimum: 1 }
         playDate: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
         source: { type: string, enum: [GENERATED, RECONCILED, MANUAL] }
+    ScheduleWeek:
+      type: object
+      required:
+        [
+          id,
+          seasonId,
+          seasonName,
+          weekNumber,
+          playDate,
+          startDate,
+          endDate,
+          games,
+          byes,
+          canManage,
+          canPublish,
+          canEdit,
+        ]
+      properties:
+        id: { type: integer }
+        seasonId: { type: integer }
+        seasonName: { type: string }
+        weekNumber: { type: integer, minimum: 1 }
+        playDate: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        startDate: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        endDate: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        games:
+          type: array
+          items: { $ref: "#/components/schemas/Game" }
+        byes:
+          type: array
+          items: { $ref: "#/components/schemas/TeamBye" }
+        canManage: { type: boolean }
+        canPublish: { type: boolean }
+        canEdit: { type: boolean }
     TeamByeInput:
       type: object
       required: [teamId, scheduleWeek, playDate]

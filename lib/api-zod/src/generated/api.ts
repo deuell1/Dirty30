@@ -379,12 +379,16 @@ export const ListGamesResponseItem = zod.object({
 export const ListGamesResponse = zod.array(ListGamesResponseItem)
 
 
+
+
+
 export const CreateGameBody = zod.object({
   "homeTeamId": zod.int(),
   "awayTeamId": zod.int(),
   "venueId": zod.int(),
   "courtId": zod.int(),
-  "scheduledAt": zod.coerce.date()
+  "scheduledAt": zod.coerce.date(),
+  "scheduleWeekId": zod.int().min(1).optional()
 })
 
 export const CreateGameResponse = zod.object({
@@ -445,12 +449,16 @@ export const UpdateGameParams = zod.object({
   "gameId": zod.coerce.number().int()
 })
 
+
+
+
 export const UpdateGameBody = zod.object({
   "homeTeamId": zod.int(),
   "awayTeamId": zod.int(),
   "venueId": zod.int(),
   "courtId": zod.int(),
-  "scheduledAt": zod.coerce.date()
+  "scheduledAt": zod.coerce.date(),
+  "scheduleWeekId": zod.int().min(1).optional()
 })
 
 export const UpdateGameResponse = zod.object({
@@ -574,6 +582,64 @@ export const CommitScheduleGeneratorResponse = zod.object({
   "createdCount": zod.int(),
   "noOp": zod.boolean()
 })
+
+
+/**
+ * @summary List canonical schedule weeks with visible games and byes
+ */
+
+export const listScheduleWeeksResponsePlayDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const listScheduleWeeksResponseStartDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const listScheduleWeeksResponseEndDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+export const listScheduleWeeksResponseByesItemPlayDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const ListScheduleWeeksResponseItem = zod.object({
+  "id": zod.int(),
+  "seasonId": zod.int(),
+  "seasonName": zod.string(),
+  "weekNumber": zod.int().min(1),
+  "playDate": zod.string().regex(listScheduleWeeksResponsePlayDateRegExp),
+  "startDate": zod.string().regex(listScheduleWeeksResponseStartDateRegExp),
+  "endDate": zod.string().regex(listScheduleWeeksResponseEndDateRegExp),
+  "games": zod.array(zod.object({
+  "id": zod.int(),
+  "date": zod.string(),
+  "startTime": zod.string(),
+  "venue": zod.string(),
+  "court": zod.string(),
+  "homeTeam": zod.string(),
+  "awayTeam": zod.string(),
+  "homeTeamId": zod.int().optional(),
+  "awayTeamId": zod.int().optional(),
+  "venueId": zod.int().optional(),
+  "courtId": zod.int().optional(),
+  "scheduleWeek": zod.int().nullable(),
+  "status": zod.enum(['SCHEDULED', 'CANCELLED', 'FINAL', 'PENDING_CONFIRMATION', 'DISPUTED']),
+  "published": zod.boolean(),
+  "homeScore": zod.int().nullish(),
+  "awayScore": zod.int().nullish(),
+  "scoreSubmittedByCurrentUser": zod.boolean().optional(),
+  "disputeReason": zod.string().nullish(),
+  "canSubmitScore": zod.boolean().optional(),
+  "canConfirmOrDisputeScore": zod.boolean().optional(),
+  "canManageScore": zod.boolean().optional()
+})),
+  "byes": zod.array(zod.object({
+  "id": zod.int(),
+  "seasonId": zod.int(),
+  "teamId": zod.int(),
+  "teamName": zod.string(),
+  "scheduleWeek": zod.int().min(1),
+  "playDate": zod.string().regex(listScheduleWeeksResponseByesItemPlayDateRegExp),
+  "source": zod.enum(['GENERATED', 'RECONCILED', 'MANUAL'])
+})),
+  "canManage": zod.boolean(),
+  "canPublish": zod.boolean(),
+  "canEdit": zod.boolean()
+})
+export const ListScheduleWeeksResponse = zod.array(ListScheduleWeeksResponseItem)
 
 
 /**
