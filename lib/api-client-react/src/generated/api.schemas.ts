@@ -41,6 +41,8 @@ export interface Game {
   awayTeamId?: number;
   venueId?: number;
   courtId?: number;
+  /** @nullable */
+  scheduleWeek: number | null;
   status: GameStatus;
   published: boolean;
   /** @nullable */
@@ -55,11 +57,33 @@ export interface Game {
   canManageScore?: boolean;
 }
 
+export type TeamByeSource = typeof TeamByeSource[keyof typeof TeamByeSource];
+
+
+export const TeamByeSource = {
+  GENERATED: 'GENERATED',
+  RECONCILED: 'RECONCILED',
+  MANUAL: 'MANUAL',
+} as const;
+
+export interface TeamBye {
+  id: number;
+  seasonId: number;
+  teamId: number;
+  teamName: string;
+  /** @minimum 1 */
+  scheduleWeek: number;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  playDate: string;
+  source: TeamByeSource;
+}
+
 export interface Dashboard {
   leagueName: string;
   seasonName: string;
   role: DashboardRole;
   nextGame: Game | null;
+  nextBye: TeamBye | null;
   attentionItems: string[];
   recentResults: Game[];
 }
@@ -275,6 +299,8 @@ export interface ScheduleGeneratorGame {
   date: string;
   time: string;
   round: number;
+  /** @minimum 1 */
+  scheduleWeek: number;
 }
 
 export type ScheduleGeneratorPreviewFormat = typeof ScheduleGeneratorPreviewFormat[keyof typeof ScheduleGeneratorPreviewFormat];
@@ -294,7 +320,10 @@ export type ScheduleGeneratorPreviewHomeAway = {[key: string]: {
 
 export type ScheduleGeneratorPreviewByesItem = {
   round: number;
+  scheduleWeek: number;
   teamId: number;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  playDate: string;
 };
 
 export interface ScheduleGeneratorPreview {
@@ -315,6 +344,65 @@ export interface ScheduleGeneratorPreview {
 
 export interface ScheduleGeneratorCommitResult {
   createdCount: number;
+  noOp: boolean;
+}
+
+export interface TeamByeInput {
+  /** @minimum 1 */
+  teamId: number;
+  /** @minimum 1 */
+  scheduleWeek: number;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  playDate: string;
+}
+
+export type ByeReconciliationWeekByesItem = {
+  teamId: number;
+  teamName: string;
+  scheduleWeek: number;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  playDate: string;
+};
+
+export interface ByeReconciliationWeek {
+  /** @minimum 1 */
+  scheduleWeek: number;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  playDate: string;
+  games: Game[];
+  byes: ByeReconciliationWeekByesItem[];
+  blockers: string[];
+}
+
+/**
+ * @nullable
+ */
+export type ByeReconciliationPreviewDetectedFormat = typeof ByeReconciliationPreviewDetectedFormat[keyof typeof ByeReconciliationPreviewDetectedFormat] | null;
+
+
+export const ByeReconciliationPreviewDetectedFormat = {
+  SINGLE: 'SINGLE',
+  DOUBLE: 'DOUBLE',
+} as const;
+
+export interface ByeReconciliationPreview {
+  /** @pattern ^[a-f0-9]{64}$ */
+  previewHash: string;
+  canCommit: boolean;
+  /** @nullable */
+  detectedFormat: ByeReconciliationPreviewDetectedFormat;
+  weeks: ByeReconciliationWeek[];
+}
+
+export interface ByeReconciliationCommitInput {
+  confirm: true;
+  /** @pattern ^[a-f0-9]{64}$ */
+  previewHash: string;
+}
+
+export interface ByeReconciliationResult {
+  updatedGames: number;
+  createdByes: number;
   noOp: boolean;
 }
 
@@ -385,5 +473,27 @@ export type AcceptInvitation200 = {
 export type ListGamesParams = {
 teamId?: number;
 date?: string;
+};
+
+export type ListTeamByesParams = {
+/**
+ * @minimum 1
+ */
+teamId?: number;
+/**
+ * @minimum 1
+ */
+scheduleWeek?: number;
+};
+
+export type DeleteTeamByeParams = {
+/**
+ * @minimum 1
+ */
+teamId: number;
+/**
+ * @minimum 1
+ */
+scheduleWeek: number;
 };
 

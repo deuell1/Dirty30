@@ -5,11 +5,16 @@
  * Dirty-30 league management API
  * OpenAPI spec version: 0.1.0
  */
+import type { TeamByeSource } from './teamByeSource';
 
-export type ScheduleGeneratorPreviewByesItem = {
-  round: number;
-  scheduleWeek: number;
+export interface TeamBye {
+  id: number;
+  seasonId: number;
   teamId: number;
+  teamName: string;
+  /** @minimum 1 */
+  scheduleWeek: number;
   /** @pattern ^\d{4}-\d{2}-\d{2}$ */
   playDate: string;
-};
+  source: TeamByeSource;
+}

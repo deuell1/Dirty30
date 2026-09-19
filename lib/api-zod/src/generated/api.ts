@@ -19,6 +19,10 @@ export const HealthCheckResponse = zod.object({
 /**
  * @summary Get role-aware dashboard summary
  */
+
+export const getDashboardResponseNextByeOnePlayDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
 export const GetDashboardResponse = zod.object({
   "leagueName": zod.string(),
   "seasonName": zod.string(),
@@ -35,6 +39,7 @@ export const GetDashboardResponse = zod.object({
   "awayTeamId": zod.int().optional(),
   "venueId": zod.int().optional(),
   "courtId": zod.int().optional(),
+  "scheduleWeek": zod.int().nullable(),
   "status": zod.enum(['SCHEDULED', 'CANCELLED', 'FINAL', 'PENDING_CONFIRMATION', 'DISPUTED']),
   "published": zod.boolean(),
   "homeScore": zod.int().nullish(),
@@ -44,6 +49,15 @@ export const GetDashboardResponse = zod.object({
   "canSubmitScore": zod.boolean().optional(),
   "canConfirmOrDisputeScore": zod.boolean().optional(),
   "canManageScore": zod.boolean().optional()
+}),zod.null()]),
+  "nextBye": zod.union([zod.object({
+  "id": zod.int(),
+  "seasonId": zod.int(),
+  "teamId": zod.int(),
+  "teamName": zod.string(),
+  "scheduleWeek": zod.int().min(1),
+  "playDate": zod.string().regex(getDashboardResponseNextByeOnePlayDateRegExp),
+  "source": zod.enum(['GENERATED', 'RECONCILED', 'MANUAL'])
 }),zod.null()]),
   "attentionItems": zod.array(zod.string()),
   "recentResults": zod.array(zod.object({
@@ -58,6 +72,7 @@ export const GetDashboardResponse = zod.object({
   "awayTeamId": zod.int().optional(),
   "venueId": zod.int().optional(),
   "courtId": zod.int().optional(),
+  "scheduleWeek": zod.int().nullable(),
   "status": zod.enum(['SCHEDULED', 'CANCELLED', 'FINAL', 'PENDING_CONFIRMATION', 'DISPUTED']),
   "published": zod.boolean(),
   "homeScore": zod.int().nullish(),
@@ -333,6 +348,7 @@ export const ListGamesResponseItem = zod.object({
   "awayTeamId": zod.int().optional(),
   "venueId": zod.int().optional(),
   "courtId": zod.int().optional(),
+  "scheduleWeek": zod.int().nullable(),
   "status": zod.enum(['SCHEDULED', 'CANCELLED', 'FINAL', 'PENDING_CONFIRMATION', 'DISPUTED']),
   "published": zod.boolean(),
   "homeScore": zod.int().nullish(),
@@ -366,6 +382,7 @@ export const CreateGameResponse = zod.object({
   "awayTeamId": zod.int().optional(),
   "venueId": zod.int().optional(),
   "courtId": zod.int().optional(),
+  "scheduleWeek": zod.int().nullable(),
   "status": zod.enum(['SCHEDULED', 'CANCELLED', 'FINAL', 'PENDING_CONFIRMATION', 'DISPUTED']),
   "published": zod.boolean(),
   "homeScore": zod.int().nullish(),
@@ -394,6 +411,7 @@ export const GetGameResponse = zod.object({
   "awayTeamId": zod.int().optional(),
   "venueId": zod.int().optional(),
   "courtId": zod.int().optional(),
+  "scheduleWeek": zod.int().nullable(),
   "status": zod.enum(['SCHEDULED', 'CANCELLED', 'FINAL', 'PENDING_CONFIRMATION', 'DISPUTED']),
   "published": zod.boolean(),
   "homeScore": zod.int().nullish(),
@@ -430,6 +448,7 @@ export const UpdateGameResponse = zod.object({
   "awayTeamId": zod.int().optional(),
   "venueId": zod.int().optional(),
   "courtId": zod.int().optional(),
+  "scheduleWeek": zod.int().nullable(),
   "status": zod.enum(['SCHEDULED', 'CANCELLED', 'FINAL', 'PENDING_CONFIRMATION', 'DISPUTED']),
   "published": zod.boolean(),
   "homeScore": zod.int().nullish(),
@@ -468,7 +487,9 @@ export const PreviewScheduleGeneratorBody = zod.object({
 
 export const previewScheduleGeneratorResponsePreviewHashRegExp = new RegExp('^[a-f0-9]{64}$');
 export const previewScheduleGeneratorResponsePlayDatesUsedItemRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const previewScheduleGeneratorResponseByesItemPlayDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 export const previewScheduleGeneratorResponseGamesItemDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
 
 
 export const PreviewScheduleGeneratorResponse = zod.object({
@@ -485,7 +506,9 @@ export const PreviewScheduleGeneratorResponse = zod.object({
 })),
   "byes": zod.array(zod.object({
   "round": zod.int(),
-  "teamId": zod.int()
+  "scheduleWeek": zod.int(),
+  "teamId": zod.int(),
+  "playDate": zod.string().regex(previewScheduleGeneratorResponseByesItemPlayDateRegExp)
 })),
   "games": zod.array(zod.object({
   "homeTeamId": zod.int(),
@@ -494,7 +517,8 @@ export const PreviewScheduleGeneratorResponse = zod.object({
   "courtId": zod.int(),
   "date": zod.string().regex(previewScheduleGeneratorResponseGamesItemDateRegExp),
   "time": zod.string(),
-  "round": zod.int()
+  "round": zod.int(),
+  "scheduleWeek": zod.int().min(1)
 })),
   "warnings": zod.array(zod.string())
 })
@@ -531,6 +555,143 @@ export const CommitScheduleGeneratorBody = zod.object({
 
 export const CommitScheduleGeneratorResponse = zod.object({
   "createdCount": zod.int(),
+  "noOp": zod.boolean()
+})
+
+
+/**
+ * @summary List visible bye weeks
+ */
+
+
+
+
+export const ListTeamByesQueryParams = zod.object({
+  "teamId": zod.coerce.number().int().min(1).optional(),
+  "scheduleWeek": zod.coerce.number().int().min(1).optional()
+})
+
+
+export const listTeamByesResponsePlayDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const ListTeamByesResponseItem = zod.object({
+  "id": zod.int(),
+  "seasonId": zod.int(),
+  "teamId": zod.int(),
+  "teamName": zod.string(),
+  "scheduleWeek": zod.int().min(1),
+  "playDate": zod.string().regex(listTeamByesResponsePlayDateRegExp),
+  "source": zod.enum(['GENERATED', 'RECONCILED', 'MANUAL'])
+})
+export const ListTeamByesResponse = zod.array(ListTeamByesResponseItem)
+
+
+/**
+ * @summary Create a manual bye
+ */
+
+
+export const createTeamByeBodyPlayDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const CreateTeamByeBody = zod.object({
+  "teamId": zod.int().min(1),
+  "scheduleWeek": zod.int().min(1),
+  "playDate": zod.string().regex(createTeamByeBodyPlayDateRegExp)
+})
+
+
+export const createTeamByeResponsePlayDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const CreateTeamByeResponse = zod.object({
+  "id": zod.int(),
+  "seasonId": zod.int(),
+  "teamId": zod.int(),
+  "teamName": zod.string(),
+  "scheduleWeek": zod.int().min(1),
+  "playDate": zod.string().regex(createTeamByeResponsePlayDateRegExp),
+  "source": zod.enum(['GENERATED', 'RECONCILED', 'MANUAL'])
+})
+
+
+
+
+
+
+export const DeleteTeamByeQueryParams = zod.object({
+  "teamId": zod.coerce.number().int().min(1),
+  "scheduleWeek": zod.coerce.number().int().min(1)
+})
+
+export const DeleteTeamByeResponse = zod.void()
+
+
+/**
+ * @summary Preview reconciliation of the existing schedule
+ */
+export const previewByeReconciliationResponsePreviewHashRegExp = new RegExp('^[a-f0-9]{64}$');
+
+export const previewByeReconciliationResponseWeeksItemPlayDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const previewByeReconciliationResponseWeeksItemByesItemPlayDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const PreviewByeReconciliationResponse = zod.object({
+  "previewHash": zod.string().regex(previewByeReconciliationResponsePreviewHashRegExp),
+  "canCommit": zod.boolean(),
+  "detectedFormat": zod.union([zod.literal('SINGLE'),zod.literal('DOUBLE'),zod.literal(null)]).nullable(),
+  "weeks": zod.array(zod.object({
+  "scheduleWeek": zod.int().min(1),
+  "playDate": zod.string().regex(previewByeReconciliationResponseWeeksItemPlayDateRegExp),
+  "games": zod.array(zod.object({
+  "id": zod.int(),
+  "date": zod.string(),
+  "startTime": zod.string(),
+  "venue": zod.string(),
+  "court": zod.string(),
+  "homeTeam": zod.string(),
+  "awayTeam": zod.string(),
+  "homeTeamId": zod.int().optional(),
+  "awayTeamId": zod.int().optional(),
+  "venueId": zod.int().optional(),
+  "courtId": zod.int().optional(),
+  "scheduleWeek": zod.int().nullable(),
+  "status": zod.enum(['SCHEDULED', 'CANCELLED', 'FINAL', 'PENDING_CONFIRMATION', 'DISPUTED']),
+  "published": zod.boolean(),
+  "homeScore": zod.int().nullish(),
+  "awayScore": zod.int().nullish(),
+  "scoreSubmittedByCurrentUser": zod.boolean().optional(),
+  "disputeReason": zod.string().nullish(),
+  "canSubmitScore": zod.boolean().optional(),
+  "canConfirmOrDisputeScore": zod.boolean().optional(),
+  "canManageScore": zod.boolean().optional()
+})),
+  "byes": zod.array(zod.object({
+  "teamId": zod.int(),
+  "teamName": zod.string(),
+  "scheduleWeek": zod.int(),
+  "playDate": zod.string().regex(previewByeReconciliationResponseWeeksItemByesItemPlayDateRegExp)
+})),
+  "blockers": zod.array(zod.string())
+}))
+})
+
+
+/**
+ * @summary Commit a reviewed bye reconciliation
+ */
+export const commitByeReconciliationBodyPreviewHashRegExp = new RegExp('^[a-f0-9]{64}$');
+
+
+export const CommitByeReconciliationBody = zod.object({
+  "confirm": zod.literal(true),
+  "previewHash": zod.string().regex(commitByeReconciliationBodyPreviewHashRegExp)
+})
+
+export const CommitByeReconciliationResponse = zod.object({
+  "updatedGames": zod.int(),
+  "createdByes": zod.int(),
   "noOp": zod.boolean()
 })
 
@@ -716,6 +877,7 @@ export const GetScoreReviewQueueResponseItem = zod.object({
   "awayTeamId": zod.int().optional(),
   "venueId": zod.int().optional(),
   "courtId": zod.int().optional(),
+  "scheduleWeek": zod.int().nullable(),
   "status": zod.enum(['SCHEDULED', 'CANCELLED', 'FINAL', 'PENDING_CONFIRMATION', 'DISPUTED']),
   "published": zod.boolean(),
   "homeScore": zod.int().nullish(),

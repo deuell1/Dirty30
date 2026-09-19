@@ -45,6 +45,11 @@ export const gameStatusEnum = pgEnum("game_status", [
   "DISPUTED",
   "FINAL",
 ]);
+export const teamByeSourceEnum = pgEnum("team_bye_source", [
+  "GENERATED",
+  "RECONCILED",
+  "MANUAL",
+]);
 
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true })
@@ -212,6 +217,7 @@ export const games = pgTable(
       .notNull()
       .references(() => courts.id, { onDelete: "restrict" }),
     scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
+    scheduleWeek: integer("schedule_week"),
     status: gameStatusEnum("status").notNull().default("DRAFT"),
     homeScore: integer("home_score"),
     awayScore: integer("away_score"),
@@ -252,6 +258,39 @@ export const games = pgTable(
       "games_nonnegative_away_scores",
       sql`${table.awayScore} IS NULL OR ${table.awayScore} >= 0`,
     ),
+    check(
+      "games_positive_schedule_week",
+      sql`${table.scheduleWeek} IS NULL OR ${table.scheduleWeek} > 0`,
+    ),
+  ],
+);
+
+export const teamByes = pgTable(
+  "team_byes",
+  {
+    id: serial("id").primaryKey(),
+    seasonId: integer("season_id")
+      .notNull()
+      .references(() => seasons.id, { onDelete: "restrict" }),
+    teamId: integer("team_id")
+      .notNull()
+      .references(() => teams.id, { onDelete: "restrict" }),
+    scheduleWeek: integer("schedule_week").notNull(),
+    playDate: date("play_date", { mode: "string" }).notNull(),
+    source: teamByeSourceEnum("source").notNull(),
+    createdByUserId: integer("created_by_user_id").references(() => users.id, {
+      onDelete: "restrict",
+    }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("team_byes_season_team_week").on(
+      table.seasonId,
+      table.teamId,
+      table.scheduleWeek,
+    ),
+    index("team_byes_season_date_idx").on(table.seasonId, table.playDate),
+    check("team_byes_positive_week", sql`${table.scheduleWeek} > 0`),
   ],
 );
 
@@ -283,6 +322,7 @@ export const insertPlayerInvitationSchema =
 export const insertVenueSchema = createInsertSchema(venues);
 export const insertCourtSchema = createInsertSchema(courts);
 export const insertGameSchema = createInsertSchema(games);
+export const insertTeamByeSchema = createInsertSchema(teamByes);
 export const insertAuditEventSchema = createInsertSchema(auditEvents);
 
 export type User = typeof users.$inferSelect;
@@ -294,5 +334,6 @@ export type PlayerInvitation = typeof playerInvitations.$inferSelect;
 export type Venue = typeof venues.$inferSelect;
 export type Court = typeof courts.$inferSelect;
 export type Game = typeof games.$inferSelect;
+export type TeamBye = typeof teamByes.$inferSelect;
 export type AuditEvent = typeof auditEvents.$inferSelect;
 export type UserRole = z.infer<typeof insertUserSchema>["role"];

@@ -25,6 +25,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { scheduleFormForEdit } from "./schedule-form";
 import { courtUpdatePayload, venueUpdatePayload } from "./venue-court-editor";
 import { ScheduleGenerator } from "./schedule-generator";
+import { ByeWeekAdmin } from "./bye-admin";
 
 function message(error: unknown) {
   if (typeof error === "object" && error) {
@@ -585,6 +586,7 @@ export function CommissionerScheduleAdmin() {
         </section>
       </div>
       <ScheduleGenerator />
+      <ByeWeekAdmin />
       <div className="space-y-3">
         <h3 className="font-display text-lg font-bold">
           Commissioner schedule

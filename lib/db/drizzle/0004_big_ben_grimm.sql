@@ -1,0 +1,1 @@
+ALTER TABLE "games" ADD CONSTRAINT "games_positive_schedule_week" CHECK ("games"."schedule_week" IS NULL OR "games"."schedule_week" > 0);

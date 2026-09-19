@@ -11,10 +11,12 @@ import {
   getGetTeamRosterQueryKey,
   getListGamesQueryKey,
   getListTeamsQueryKey,
+  useListTeamByes,
   type Dashboard,
   type Game,
   type Player,
   type Team,
+  type TeamBye,
   useAcceptInvitation,
   useAssignTeamCaptain,
   useCancelInvitation,
@@ -105,13 +107,38 @@ export function DashboardPage() {
           <p className="text-xs font-bold uppercase tracking-[.16em] text-[hsl(var(--primary))]">
             Up next
           </p>
-          {data?.nextGame ? (
-            <GameSummary game={data.nextGame} />
-          ) : (
-            <p className="mt-3 text-sm text-[hsl(var(--muted-foreground))]">
-              No published game is scheduled yet.
-            </p>
-          )}
+          {(() => {
+            const nextGame = data?.nextGame;
+            const nextBye = data?.nextBye;
+            if (!nextGame && !nextBye) {
+              return (
+                <p className="mt-3 text-sm text-[hsl(var(--muted-foreground))]">
+                  No published game or bye is scheduled yet.
+                </p>
+              );
+            }
+            if (
+              nextGame &&
+              (!nextBye ||
+                new Date(nextGame.date).getTime() <=
+                  new Date(nextBye.playDate).getTime())
+            ) {
+              return <GameSummary game={nextGame} />;
+            }
+            return (
+              <div className="mt-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-4 text-center">
+                <p className="text-sm font-bold text-[hsl(var(--primary))]">
+                  Week {nextBye!.scheduleWeek} Bye
+                </p>
+                <p className="mt-1 font-display text-xl font-bold">
+                  {nextBye!.playDate}
+                </p>
+                <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
+                  {nextBye!.teamName} has a bye — no match scheduled.
+                </p>
+              </div>
+            );
+          })()}
         </section>
         {commissioner && (
           <section className={card}>
@@ -430,10 +457,34 @@ export function TeamDetailPage() {
 }
 
 export function SchedulePage() {
-  const games = useListGames();
+  const gamesQuery = useListGames();
+  const byesQuery = useListTeamByes();
   const profile = useGetCurrentUser();
-  const list = (games.data ?? []) as Game[];
+  const gamesList = (gamesQuery.data ?? []) as Game[];
+  const byesList = (byesQuery.data ?? []) as TeamBye[];
   const commissioner = profile.data?.role === DashboardRole.COMMISSIONER;
+
+  const scheduleItems = [
+    ...gamesList.map((g) => ({
+      type: "game" as const,
+      week: (g as Game & { scheduleWeek?: number | null }).scheduleWeek ?? 999,
+      date: g.date,
+      time: g.startTime,
+      data: g,
+    })),
+    ...byesList.map((b) => ({
+      type: "bye" as const,
+      week: b.scheduleWeek,
+      date: b.playDate,
+      time: "00:00",
+      data: b,
+    })),
+  ].sort((a, b) => {
+    if (a.week !== b.week) return a.week - b.week;
+    if (a.date !== b.date) return a.date.localeCompare(b.date);
+    return a.time.localeCompare(b.time);
+  });
+
   return (
     <div className="animate-rise">
       <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:gap-4">
@@ -445,15 +496,48 @@ export function SchedulePage() {
             Schedule
           </h1>
           <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
-            Published games for the league; drafts stay in the commissioner
-            room.
+            Published games and byes for the league; drafts stay in the
+            commissioner room.
           </p>
         </div>
       </div>
       <div className="mt-6 space-y-3">
-        {list.map((game) => (
-          <GameSummary key={game.id} game={game} />
-        ))}
+        {scheduleItems.length === 0 ? (
+          <p className="text-sm text-[hsl(var(--muted-foreground))]">
+            No schedule items published.
+          </p>
+        ) : (
+          scheduleItems.map((item, index) =>
+            item.type === "game" ? (
+              <GameSummary
+                key={`game-${item.data.id}`}
+                game={item.data as Game}
+              />
+            ) : (
+              <div
+                key={`bye-${(item.data as TeamBye).id}-${index}`}
+                className={`${card} border-dashed border-[hsl(var(--muted-foreground)/.3)] bg-[hsl(var(--muted)/.2)] transition hover:border-[hsl(var(--primary))]`}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">
+                    Week {item.week} · {item.date}
+                  </p>
+                  <span className="rounded-full bg-[hsl(var(--muted-foreground)/.15)] px-2 py-1 text-[10px] font-bold text-[hsl(var(--muted-foreground))]">
+                    BYE WEEK
+                  </span>
+                </div>
+                <div className="mt-4 flex flex-col gap-2">
+                  <strong className="min-w-0 break-words font-display text-lg">
+                    {(item.data as TeamBye).teamName}
+                  </strong>
+                  <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                    BYE — No match scheduled this week.
+                  </p>
+                </div>
+              </div>
+            ),
+          )
+        )}
       </div>
       {commissioner && <CommissionerScheduleAdmin />}
     </div>

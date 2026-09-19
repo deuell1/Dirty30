@@ -22,11 +22,15 @@ import type {
 import type {
   AcceptInvitation200,
   ActiveInput,
+  ByeReconciliationCommitInput,
+  ByeReconciliationPreview,
+  ByeReconciliationResult,
   CaptainInput,
   Court,
   CourtInput,
   CourtUpdate,
   Dashboard,
+  DeleteTeamByeParams,
   DisputeInput,
   Game,
   GameInput,
@@ -37,6 +41,7 @@ import type {
   LeagueInitializationResult,
   LeagueInitializationStatus,
   ListGamesParams,
+  ListTeamByesParams,
   Player,
   ProfileInput,
   ScheduleGeneratorCommitInput,
@@ -47,6 +52,8 @@ import type {
   ScoreInput,
   Standing,
   Team,
+  TeamBye,
+  TeamByeInput,
   TeamInput,
   TeamUpdate,
   UserProfile,
@@ -1760,6 +1767,375 @@ export const useCommitScheduleGenerator = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getCommitScheduleGeneratorMutationOptions(options));
+    }
+
+export const getListTeamByesUrl = (params?: ListTeamByesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/schedule/byes?${stringifiedParams}` : `/api/schedule/byes`
+}
+
+/**
+ * @summary List visible bye weeks
+ */
+export const listTeamByes = async (params?: ListTeamByesParams, options?: Parameters<typeof customFetch>[1]): Promise<TeamBye[]> => {
+
+  return customFetch<TeamBye[]>(getListTeamByesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListTeamByesQueryKey = (params?: ListTeamByesParams,) => {
+    return [
+    `/api/schedule/byes`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListTeamByesQueryOptions = <TData = Awaited<ReturnType<typeof listTeamByes>>, TError = ErrorType<unknown>>(params?: ListTeamByesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTeamByes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListTeamByesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listTeamByes>>> = ({ signal }) => listTeamByes(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listTeamByes>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListTeamByesQueryResult = NonNullable<Awaited<ReturnType<typeof listTeamByes>>>
+export type ListTeamByesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List visible bye weeks
+ */
+
+export function useListTeamByes<TData = Awaited<ReturnType<typeof listTeamByes>>, TError = ErrorType<unknown>>(
+ params?: ListTeamByesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTeamByes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListTeamByesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateTeamByeUrl = () => {
+
+
+
+
+  return `/api/schedule/byes`
+}
+
+/**
+ * @summary Create a manual bye
+ */
+export const createTeamBye = async (teamByeInput: TeamByeInput, options?: Parameters<typeof customFetch>[1]): Promise<TeamBye> => {
+
+  return customFetch<TeamBye>(getCreateTeamByeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(teamByeInput)
+  }
+);}
+
+
+
+
+
+export const getCreateTeamByeMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTeamBye>>, TError,{data: BodyType<TeamByeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createTeamBye>>, TError,{data: BodyType<TeamByeInput>}, TContext> => {
+
+const mutationKey = ['createTeamBye'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createTeamBye>>, {data: BodyType<TeamByeInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createTeamBye(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateTeamByeMutationResult = NonNullable<Awaited<ReturnType<typeof createTeamBye>>>
+    export type CreateTeamByeMutationBody = BodyType<TeamByeInput>
+    export type CreateTeamByeMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create a manual bye
+ */
+export const useCreateTeamBye = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTeamBye>>, TError,{data: BodyType<TeamByeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createTeamBye>>,
+        TError,
+        {data: BodyType<TeamByeInput>},
+        TContext
+      > => {
+      return useMutation(getCreateTeamByeMutationOptions(options));
+    }
+
+export const getDeleteTeamByeUrl = (params: DeleteTeamByeParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/schedule/byes?${stringifiedParams}` : `/api/schedule/byes`
+}
+
+export const deleteTeamBye = async (params: DeleteTeamByeParams, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteTeamByeUrl(params),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteTeamByeMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTeamBye>>, TError,{params: DeleteTeamByeParams}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteTeamBye>>, TError,{params: DeleteTeamByeParams}, TContext> => {
+
+const mutationKey = ['deleteTeamBye'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteTeamBye>>, {params: DeleteTeamByeParams}> = (props) => {
+          const {params} = props ?? {};
+
+          return  deleteTeamBye(params,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteTeamByeMutationResult = NonNullable<Awaited<ReturnType<typeof deleteTeamBye>>>
+
+    export type DeleteTeamByeMutationError = ErrorType<unknown>
+
+    export const useDeleteTeamBye = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTeamBye>>, TError,{params: DeleteTeamByeParams}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteTeamBye>>,
+        TError,
+        {params: DeleteTeamByeParams},
+        TContext
+      > => {
+      return useMutation(getDeleteTeamByeMutationOptions(options));
+    }
+
+export const getPreviewByeReconciliationUrl = () => {
+
+
+
+
+  return `/api/schedule/byes/reconcile/preview`
+}
+
+/**
+ * @summary Preview reconciliation of the existing schedule
+ */
+export const previewByeReconciliation = async ( options?: Parameters<typeof customFetch>[1]): Promise<ByeReconciliationPreview> => {
+
+  return customFetch<ByeReconciliationPreview>(getPreviewByeReconciliationUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getPreviewByeReconciliationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewByeReconciliation>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof previewByeReconciliation>>, TError,void, TContext> => {
+
+const mutationKey = ['previewByeReconciliation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof previewByeReconciliation>>, void> = () => {
+
+
+          return  previewByeReconciliation(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PreviewByeReconciliationMutationResult = NonNullable<Awaited<ReturnType<typeof previewByeReconciliation>>>
+
+    export type PreviewByeReconciliationMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Preview reconciliation of the existing schedule
+ */
+export const usePreviewByeReconciliation = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewByeReconciliation>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof previewByeReconciliation>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getPreviewByeReconciliationMutationOptions(options));
+    }
+
+export const getCommitByeReconciliationUrl = () => {
+
+
+
+
+  return `/api/schedule/byes/reconcile/commit`
+}
+
+/**
+ * @summary Commit a reviewed bye reconciliation
+ */
+export const commitByeReconciliation = async (byeReconciliationCommitInput: ByeReconciliationCommitInput, options?: Parameters<typeof customFetch>[1]): Promise<ByeReconciliationResult> => {
+
+  return customFetch<ByeReconciliationResult>(getCommitByeReconciliationUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(byeReconciliationCommitInput)
+  }
+);}
+
+
+
+
+
+export const getCommitByeReconciliationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof commitByeReconciliation>>, TError,{data: BodyType<ByeReconciliationCommitInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof commitByeReconciliation>>, TError,{data: BodyType<ByeReconciliationCommitInput>}, TContext> => {
+
+const mutationKey = ['commitByeReconciliation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof commitByeReconciliation>>, {data: BodyType<ByeReconciliationCommitInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  commitByeReconciliation(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CommitByeReconciliationMutationResult = NonNullable<Awaited<ReturnType<typeof commitByeReconciliation>>>
+    export type CommitByeReconciliationMutationBody = BodyType<ByeReconciliationCommitInput>
+    export type CommitByeReconciliationMutationError = ErrorType<void>
+
+    /**
+ * @summary Commit a reviewed bye reconciliation
+ */
+export const useCommitByeReconciliation = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof commitByeReconciliation>>, TError,{data: BodyType<ByeReconciliationCommitInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof commitByeReconciliation>>,
+        TError,
+        {data: BodyType<ByeReconciliationCommitInput>},
+        TContext
+      > => {
+      return useMutation(getCommitByeReconciliationMutationOptions(options));
     }
 
 export const getPublishGameUrl = (gameId: number,) => {

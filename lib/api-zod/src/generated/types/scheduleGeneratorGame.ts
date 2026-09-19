@@ -15,4 +15,6 @@ export interface ScheduleGeneratorGame {
   date: string;
   time: string;
   round: number;
+  /** @minimum 1 */
+  scheduleWeek: number;
 }

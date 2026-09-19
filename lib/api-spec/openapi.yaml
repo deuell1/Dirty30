@@ -389,6 +389,83 @@ paths:
                 $ref: "#/components/schemas/ScheduleGeneratorCommitResult"
         "409":
           description: Schedule capacity, conflict, or duplicate error
+  /schedule/byes:
+    get:
+      operationId: listTeamByes
+      tags: [schedule]
+      summary: List visible bye weeks
+      parameters:
+        - name: teamId
+          in: query
+          schema: { type: integer, minimum: 1 }
+        - name: scheduleWeek
+          in: query
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Bye weeks
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TeamBye" }
+    post:
+      operationId: createTeamBye
+      tags: [schedule]
+      summary: Create a manual bye
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TeamByeInput" }
+      responses:
+        "201":
+          description: Bye created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TeamBye" }
+    delete:
+      operationId: deleteTeamBye
+      tags: [schedule]
+      parameters:
+        - name: teamId
+          in: query
+          required: true
+          schema: { type: integer, minimum: 1 }
+        - name: scheduleWeek
+          in: query
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses: { "204": { description: Bye removed } }
+  /schedule/byes/reconcile/preview:
+    post:
+      operationId: previewByeReconciliation
+      tags: [schedule]
+      summary: Preview reconciliation of the existing schedule
+      responses:
+        "200":
+          description: Reconciliation preview
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ByeReconciliationPreview" }
+  /schedule/byes/reconcile/commit:
+    post:
+      operationId: commitByeReconciliation
+      tags: [schedule]
+      summary: Commit a reviewed bye reconciliation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { $ref: "#/components/schemas/ByeReconciliationCommitInput" }
+      responses:
+        "200":
+          description: Reconciliation committed or already present
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ByeReconciliationResult" }
+        "409": { description: Reconciliation is stale or blocked }
   /schedule/{gameId}/publish:
     post:
       operationId: publishGame
@@ -641,7 +718,15 @@ components:
     Dashboard:
       type: object
       required:
-        [leagueName, seasonName, role, nextGame, attentionItems, recentResults]
+        [
+          leagueName,
+          seasonName,
+          role,
+          nextGame,
+          nextBye,
+          attentionItems,
+          recentResults,
+        ]
       properties:
         leagueName: { type: string }
         seasonName: { type: string }
@@ -649,6 +734,10 @@ components:
         nextGame:
           anyOf:
             - $ref: "#/components/schemas/Game"
+            - type: "null"
+        nextBye:
+          anyOf:
+            - $ref: "#/components/schemas/TeamBye"
             - type: "null"
         attentionItems:
           type: array
@@ -820,7 +909,16 @@ components:
     ScheduleGeneratorGame:
       type: object
       required:
-        [homeTeamId, awayTeamId, scheduledAt, courtId, date, time, round]
+        [
+          homeTeamId,
+          awayTeamId,
+          scheduledAt,
+          courtId,
+          date,
+          time,
+          round,
+          scheduleWeek,
+        ]
       properties:
         homeTeamId: { type: integer }
         awayTeamId: { type: integer }
@@ -829,6 +927,7 @@ components:
         date: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
         time: { type: string }
         round: { type: integer }
+        scheduleWeek: { type: integer, minimum: 1 }
     ScheduleGeneratorPreview:
       type: object
       required:
@@ -871,10 +970,12 @@ components:
           type: array
           items:
             type: object
-            required: [round, teamId]
+            required: [round, scheduleWeek, teamId, playDate]
             properties:
               round: { type: integer }
+              scheduleWeek: { type: integer }
               teamId: { type: integer }
+              playDate: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
         games:
           type: array
           items: { $ref: "#/components/schemas/ScheduleGeneratorGame" }
@@ -886,6 +987,70 @@ components:
       required: [createdCount, noOp]
       properties:
         createdCount: { type: integer }
+        noOp: { type: boolean }
+    TeamBye:
+      type: object
+      required: [id, seasonId, teamId, teamName, scheduleWeek, playDate, source]
+      properties:
+        id: { type: integer }
+        seasonId: { type: integer }
+        teamId: { type: integer }
+        teamName: { type: string }
+        scheduleWeek: { type: integer, minimum: 1 }
+        playDate: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        source: { type: string, enum: [GENERATED, RECONCILED, MANUAL] }
+    TeamByeInput:
+      type: object
+      required: [teamId, scheduleWeek, playDate]
+      properties:
+        teamId: { type: integer, minimum: 1 }
+        scheduleWeek: { type: integer, minimum: 1 }
+        playDate: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+    ByeReconciliationWeek:
+      type: object
+      required: [scheduleWeek, playDate, games, byes, blockers]
+      properties:
+        scheduleWeek: { type: integer, minimum: 1 }
+        playDate: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        games:
+          type: array
+          items: { $ref: "#/components/schemas/Game" }
+        byes:
+          type: array
+          items:
+            type: object
+            required: [teamId, teamName, scheduleWeek, playDate]
+            properties:
+              teamId: { type: integer }
+              teamName: { type: string }
+              scheduleWeek: { type: integer }
+              playDate: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        blockers:
+          type: array
+          items: { type: string }
+    ByeReconciliationPreview:
+      type: object
+      required: [previewHash, canCommit, detectedFormat, weeks]
+      properties:
+        previewHash: { type: string, pattern: "^[a-f0-9]{64}$" }
+        canCommit: { type: boolean }
+        detectedFormat:
+          { type: ["string", "null"], enum: [SINGLE, DOUBLE, null] }
+        weeks:
+          type: array
+          items: { $ref: "#/components/schemas/ByeReconciliationWeek" }
+    ByeReconciliationCommitInput:
+      type: object
+      required: [confirm, previewHash]
+      properties:
+        confirm: { type: boolean, const: true }
+        previewHash: { type: string, pattern: "^[a-f0-9]{64}$" }
+    ByeReconciliationResult:
+      type: object
+      required: [updatedGames, createdByes, noOp]
+      properties:
+        updatedGames: { type: integer }
+        createdByes: { type: integer }
         noOp: { type: boolean }
     Player:
       type: object
@@ -909,6 +1074,7 @@ components:
           awayTeam,
           status,
           published,
+          scheduleWeek,
         ]
       properties:
         id: { type: integer }
@@ -922,6 +1088,7 @@ components:
         awayTeamId: { type: integer }
         venueId: { type: integer }
         courtId: { type: integer }
+        scheduleWeek: { type: ["integer", "null"] }
         status:
           {
             type: string,

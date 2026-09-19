@@ -22,6 +22,20 @@
       "when": 1787668333948,
       "tag": "0002_breezy_wrecker",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789840075375,
+      "tag": "0003_good_shotgun",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789840401698,
+      "tag": "0004_big_ben_grimm",
+      "breakpoints": true
     }
   ]
 }

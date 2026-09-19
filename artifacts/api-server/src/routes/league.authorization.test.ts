@@ -93,6 +93,30 @@ describe("league route authorization boundary", () => {
     ["creates teams", "post", "/teams", { name: "Amber" }],
     ["reads the commissioner review queue", "get", "/scores/review", undefined],
     [
+      "creates a manual bye",
+      "post",
+      "/schedule/byes",
+      { teamId: 1, scheduleWeek: 1, playDate: "2026-09-01" },
+    ],
+    [
+      "deletes a manual bye",
+      "delete",
+      "/schedule/byes?teamId=1&scheduleWeek=1",
+      undefined,
+    ],
+    [
+      "previews bye reconciliation",
+      "post",
+      "/schedule/byes/reconcile/preview",
+      undefined,
+    ],
+    [
+      "commits bye reconciliation",
+      "post",
+      "/schedule/byes/reconcile/commit",
+      { previewHash: "a".repeat(64) },
+    ],
+    [
       "creates a schedule",
       "post",
       "/schedule",

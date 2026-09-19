@@ -23,6 +23,14 @@ import {
   ListTeamsResponse,
   CommitScheduleGeneratorBody,
   CommitScheduleGeneratorResponse,
+  CommitByeReconciliationBody,
+  CommitByeReconciliationResponse,
+  CreateTeamByeBody,
+  CreateTeamByeResponse,
+  DeleteTeamByeQueryParams,
+  ListTeamByesQueryParams,
+  ListTeamByesResponse,
+  PreviewByeReconciliationResponse,
   PreviewScheduleGeneratorBody,
   PreviewScheduleGeneratorResponse,
   SubmitScoreBody,
@@ -42,6 +50,7 @@ import {
   seasons,
   teamMemberships,
   teams,
+  teamByes,
   users,
   venues,
   type User,
@@ -69,6 +78,7 @@ import {
 
 type ApiGame = {
   id: number;
+  scheduleWeek: number | null;
   date: string;
   startTime: string;
   venue: string;
@@ -164,10 +174,18 @@ function timeParts(value: Date) {
   });
   return { date, startTime };
 }
-async function activeSeason(database: typeof db = db) {
-  const season = await database.query.seasons.findFirst({
-    where: eq(seasons.active, true),
-  });
+async function activeSeason(database: any = db) {
+  const season = database.query
+    ? await database.query.seasons.findFirst({
+        where: eq(seasons.active, true),
+      })
+    : (
+        await database
+          .select()
+          .from(seasons)
+          .where(eq(seasons.active, true))
+          .limit(1)
+      )[0];
   if (!season) throw new Error("No active season configured");
   return season;
 }
@@ -256,9 +274,16 @@ async function apiGames(
   teamId?: number,
   date?: string,
   viewer?: Pick<User, "id" | "role">,
+  database: any = db,
 ): Promise<ApiGame[]> {
-  const season = await activeSeason();
-  const rows = await db
+  const season = await activeSeason(database);
+  const rows: Array<{
+    game: typeof games.$inferSelect;
+    home: typeof teams.$inferSelect;
+    away: typeof teams.$inferSelect;
+    venue: typeof venues.$inferSelect;
+    court: typeof courts.$inferSelect;
+  }> = await database
     .select({
       game: games,
       home: teams,
@@ -274,16 +299,16 @@ async function apiGames(
     .where(eq(games.seasonId, season.id))
     .orderBy(asc(games.scheduledAt));
   // Drizzle aliases are verbose; hydrate away teams separately to keep this join portable.
-  const allTeams = await db
+  const allTeams: Array<typeof teams.$inferSelect> = await database
     .select()
     .from(teams)
     .where(eq(teams.seasonId, season.id));
   const byId = new Map(allTeams.map((team) => [team.id, team]));
-  const captainMemberships =
+  const captainMemberships: Array<typeof teamMemberships.$inferSelect> =
     viewer?.role === "COMMISSIONER"
       ? []
       : viewer
-        ? await db
+        ? await database
             .select()
             .from(teamMemberships)
             .where(
@@ -300,17 +325,18 @@ async function apiGames(
   const submittingUserIds = rows
     .map(({ game }) => game.submittedByUserId)
     .filter((id): id is number => id !== null);
-  const submitterMemberships = submittingUserIds.length
-    ? await db
-        .select()
-        .from(teamMemberships)
-        .where(
-          and(
-            inArray(teamMemberships.userId, submittingUserIds),
-            eq(teamMemberships.active, true),
-          ),
-        )
-    : [];
+  const submitterMemberships: Array<typeof teamMemberships.$inferSelect> =
+    submittingUserIds.length
+      ? await database
+          .select()
+          .from(teamMemberships)
+          .where(
+            and(
+              inArray(teamMemberships.userId, submittingUserIds),
+              eq(teamMemberships.active, true),
+            ),
+          )
+      : [];
   return rows
     .map(({ game, home, venue, court }) => {
       const parts = timeParts(game.scheduledAt);
@@ -337,6 +363,7 @@ async function apiGames(
         opposingTeamId !== undefined && captainTeamIds.has(opposingTeamId);
       return {
         id: game.id,
+        scheduleWeek: game.scheduleWeek,
         ...parts,
         venue: venue.name,
         court: court.name,
@@ -427,6 +454,7 @@ async function validateGameInput(
   tx: ScheduleTransaction,
   input: z.infer<typeof scheduleInput>,
   excludeGameId?: number,
+  scheduleWeek?: number | null,
 ) {
   const [seasonRows, leagueRows] = await Promise.all([
     tx.select().from(seasons).where(eq(seasons.active, true)).limit(1),
@@ -515,6 +543,24 @@ async function validateGameInput(
       new Error("Teams, venue, and court must be active in the current league"),
       { status: 422 },
     );
+  if (scheduleWeek !== null && scheduleWeek !== undefined) {
+    const byeConflict = await tx
+      .select({ id: teamByes.id })
+      .from(teamByes)
+      .where(
+        and(
+          eq(teamByes.seasonId, season.id),
+          eq(teamByes.scheduleWeek, scheduleWeek),
+          inArray(teamByes.teamId, [input.homeTeamId, input.awayTeamId]),
+        ),
+      )
+      .limit(1);
+    if (byeConflict.length)
+      throw Object.assign(
+        new Error("A team cannot have a game and bye in the same week"),
+        { status: 409 },
+      );
+  }
   const endsAt = new Date(startsAt.getTime() + 90 * 60_000);
   const conflicting = await tx
     .select({ id: games.id })
@@ -721,6 +767,267 @@ function generatorResponse(
   });
 }
 
+async function validateGeneratedByePlan(
+  database: any,
+  seasonId: number,
+  generated: ReturnType<typeof generateSchedule>,
+) {
+  const existing = await database
+    .select()
+    .from(teamByes)
+    .where(eq(teamByes.seasonId, seasonId));
+  const plannedByes = new Map(
+    generated.byes.map((bye) => [
+      `${bye.teamId}:${bye.scheduleWeek}`,
+      bye.playDate,
+    ]),
+  );
+  for (const bye of existing) {
+    const key = `${bye.teamId}:${bye.scheduleWeek}`;
+    const plannedDate = plannedByes.get(key);
+    const hasGame = generated.games.some(
+      (game) =>
+        game.scheduleWeek === bye.scheduleWeek &&
+        (game.homeTeamId === bye.teamId || game.awayTeamId === bye.teamId),
+    );
+    if (plannedDate !== bye.playDate || hasGame)
+      throw Object.assign(
+        new Error(
+          `Existing bye for team ${bye.teamId} conflicts with the generated schedule`,
+        ),
+        { status: 409 },
+      );
+  }
+}
+
+type ReconciliationWeek = {
+  scheduleWeek: number;
+  playDate: string;
+  games: ApiGame[];
+  byes: Array<{
+    teamId: number;
+    teamName: string;
+    scheduleWeek: number;
+    playDate: string;
+  }>;
+  blockers: string[];
+};
+
+function reconciliationPairingKey(left: number, right: number) {
+  return [left, right].sort((a, b) => a - b).join(":");
+}
+
+function reconciliationPreview(
+  seasonId: number,
+  activeTeams: Array<{ id: number; name: string }>,
+  allGames: ApiGame[],
+  requestedFormat?: "SINGLE" | "DOUBLE",
+  existingByes: Array<{
+    teamId: number;
+    scheduleWeek: number;
+    playDate: string;
+  }> = [],
+) {
+  const rotation: Array<number | null> = activeTeams.map((team) => team.id);
+  if (rotation.length % 2) rotation.push(null);
+  const rounds = rotation.length - 1;
+  const expected: Array<{
+    round: number;
+    pair?: [number, number];
+    bye?: number;
+  }> = [];
+  for (let round = 0; round < rounds; round += 1) {
+    for (let index = 0; index < rotation.length / 2; index += 1) {
+      const left = rotation[index];
+      const right = rotation[rotation.length - 1 - index];
+      if (left === null || right === null)
+        expected.push({ round: round + 1, bye: left ?? right! });
+      else expected.push({ round: round + 1, pair: [left, right] });
+    }
+    const fixed = rotation[0];
+    const rest = rotation.slice(1);
+    rest.unshift(rest.pop()!);
+    rotation.splice(0, rotation.length, fixed!, ...rest);
+  }
+  const pairCounts = new Map<string, number>();
+  for (const game of allGames.filter((item) => item.status !== "CANCELLED")) {
+    const key = reconciliationPairingKey(game.homeTeamId, game.awayTeamId);
+    pairCounts.set(key, (pairCounts.get(key) ?? 0) + 1);
+  }
+  const expectedPairCount = (activeTeams.length * (activeTeams.length - 1)) / 2;
+  const expectedBaseKeys = new Set(
+    expected
+      .filter((entry) => entry.pair)
+      .map((entry) => reconciliationPairingKey(entry.pair![0], entry.pair![1])),
+  );
+  const counts = [...pairCounts.values()];
+  const detectedFormat =
+    counts.length === expectedPairCount &&
+    expectedBaseKeys.size === pairCounts.size &&
+    [...expectedBaseKeys].every((key) => pairCounts.has(key)) &&
+    counts.every((count) => count === 1)
+      ? "SINGLE"
+      : counts.length === expectedPairCount &&
+          expectedBaseKeys.size === pairCounts.size &&
+          [...expectedBaseKeys].every((key) => pairCounts.has(key)) &&
+          counts.every((count) => count === 2)
+        ? "DOUBLE"
+        : null;
+  const format = requestedFormat ?? detectedFormat ?? "SINGLE";
+  if (format === "DOUBLE")
+    expected.push(
+      ...expected.map((entry) => ({
+        ...entry,
+        round: entry.round + rounds,
+      })),
+    );
+  const pairRounds = new Map<string, number[]>();
+  for (const entry of expected) {
+    if (!entry.pair) continue;
+    const key = reconciliationPairingKey(entry.pair[0], entry.pair[1]);
+    pairRounds.set(key, [...(pairRounds.get(key) ?? []), entry.round]);
+  }
+  const expectedKeys = new Set(pairRounds.keys());
+  const byPair = new Map<string, ApiGame[]>();
+  for (const game of allGames.filter((item) => item.status !== "CANCELLED")) {
+    const key = reconciliationPairingKey(game.homeTeamId, game.awayTeamId);
+    byPair.set(key, [...(byPair.get(key) ?? []), game]);
+  }
+  const assigned = new Map<number, ApiGame[]>();
+  const blockers = new Map<number, string[]>();
+  const unknownPairs = [...byPair.keys()].filter(
+    (key) => !expectedKeys.has(key),
+  );
+  if (unknownPairs.length)
+    blockers.set(0, [`Unexpected matchup(s): ${unknownPairs.join(", ")}.`]);
+  for (const [key, pairRoundsForKey] of pairRounds) {
+    const games = [...(byPair.get(key) ?? [])].sort(
+      (left, right) =>
+        left.date.localeCompare(right.date) || left.id - right.id,
+    );
+    if (games.length !== pairRoundsForKey.length) {
+      for (const round of pairRoundsForKey)
+        blockers.set(round, [
+          ...(blockers.get(round) ?? []),
+          `Expected matchup ${key} is missing or duplicated.`,
+        ]);
+      continue;
+    }
+    const tiedDates =
+      new Set(games.map((game) => game.date)).size !== games.length;
+    games.forEach((game, index) => {
+      const round = pairRoundsForKey[index];
+      assigned.set(round, [...(assigned.get(round) ?? []), game]);
+      if (game.scheduleWeek !== null && game.scheduleWeek !== round)
+        blockers.set(round, [
+          ...(blockers.get(round) ?? []),
+          `Game ${game.id} has schedule week ${game.scheduleWeek}, expected ${round}.`,
+        ]);
+      if (tiedDates && pairRoundsForKey.length > 1)
+        blockers.set(round, [
+          ...(blockers.get(round) ?? []),
+          `Matchup ${key} has tied play dates and cannot be assigned safely.`,
+        ]);
+    });
+  }
+  const names = new Map(activeTeams.map((team) => [team.id, team.name]));
+  const weeks: ReconciliationWeek[] = [];
+  for (
+    let round = 1;
+    round <= rounds * (format === "DOUBLE" ? 2 : 1);
+    round += 1
+  ) {
+    const games = assigned.get(round) ?? [];
+    const dates = [...new Set(games.map((game) => game.date))];
+    const playDate = dates[0] ?? "";
+    const weekBlockers = [...(blockers.get(round) ?? [])];
+    if (!detectedFormat)
+      weekBlockers.push(
+        "Every active-team matchup must occur exactly once (SINGLE) or twice (DOUBLE).",
+      );
+    if (dates.length !== 1)
+      weekBlockers.push(
+        dates.length === 0
+          ? "No games can be confidently assigned to this week."
+          : "Games in this week span multiple play dates.",
+      );
+    const missing = expected
+      .filter((entry) => entry.round === round && entry.bye !== undefined)
+      .map((entry) => entry.bye!)
+      .filter(
+        (teamId) =>
+          !games.some(
+            (game) => game.homeTeamId === teamId || game.awayTeamId === teamId,
+          ),
+      );
+    const byes =
+      weekBlockers.length === 0 && missing.length === 1
+        ? missing.map((teamId) => ({
+            teamId,
+            teamName: names.get(teamId) ?? `Team ${teamId}`,
+            scheduleWeek: round,
+            playDate,
+          }))
+        : [];
+    for (const existing of existingByes.filter(
+      (bye) => bye.scheduleWeek === round,
+    )) {
+      const inferred = byes.find((bye) => bye.teamId === existing.teamId);
+      if (!inferred || inferred.playDate !== existing.playDate)
+        weekBlockers.push(
+          `Existing bye for team ${existing.teamId} does not match the inferred plan.`,
+        );
+    }
+    if (missing.length > 1)
+      weekBlockers.push("Multiple teams are missing from this week.");
+    if (
+      missing.length === 0 &&
+      expected.some((entry) => entry.round === round && entry.bye)
+    )
+      weekBlockers.push(
+        "No bye can be inferred because every team has a game.",
+      );
+    weeks.push({
+      scheduleWeek: round,
+      playDate,
+      games,
+      byes,
+      blockers: weekBlockers,
+    });
+  }
+  const validByeKeys = new Set(
+    weeks.flatMap((week) =>
+      week.byes.map((bye) => `${bye.teamId}:${bye.scheduleWeek}`),
+    ),
+  );
+  for (const existing of existingByes) {
+    if (!validByeKeys.has(`${existing.teamId}:${existing.scheduleWeek}`))
+      weeks[0]?.blockers.push(
+        `Existing bye for team ${existing.teamId} is not part of the inferred plan.`,
+      );
+  }
+  const canonical = JSON.stringify({
+    seasonId,
+    weeks: weeks.map((week) => ({
+      scheduleWeek: week.scheduleWeek,
+      playDate: week.playDate,
+      games: week.games.map((game) => ({
+        id: game.id,
+        scheduleWeek: game.scheduleWeek,
+        date: game.date,
+      })),
+      byes: week.byes,
+      blockers: week.blockers,
+    })),
+  });
+  return {
+    previewHash: createHash("sha256").update(canonical).digest("hex"),
+    canCommit: weeks.every((week) => week.blockers.length === 0),
+    detectedFormat,
+    weeks,
+  };
+}
+
 router.get(
   "/league-initialization",
   requireCommissioner,
@@ -823,6 +1130,49 @@ router.get("/dashboard", async (_req, res, next) => {
     ]);
     const nextGame =
       allGames.find((game) => game.status === "SCHEDULED") ?? null;
+    const viewerTeamIds =
+      user.role === "COMMISSIONER"
+        ? []
+        : (
+            await db
+              .select({ teamId: teamMemberships.teamId })
+              .from(teamMemberships)
+              .where(
+                and(
+                  eq(teamMemberships.userId, user.id),
+                  eq(teamMemberships.active, true),
+                ),
+              )
+          ).map((membership) => membership.teamId);
+    const visibleGames = allGames.filter(
+      (game) =>
+        game.status !== "CANCELLED" &&
+        game.published &&
+        (game.status === "SCHEDULED" ||
+          game.status === "FINAL" ||
+          game.status === "PENDING_CONFIRMATION" ||
+          game.status === "DISPUTED"),
+    );
+    const byeRows = viewerTeamIds.length
+      ? await db
+          .select({ bye: teamByes, team: teams })
+          .from(teamByes)
+          .innerJoin(teams, eq(teamByes.teamId, teams.id))
+          .where(
+            and(
+              eq(teamByes.seasonId, season.id),
+              inArray(teamByes.teamId, viewerTeamIds),
+            ),
+          )
+          .orderBy(asc(teamByes.playDate), asc(teamByes.scheduleWeek))
+      : [];
+    const nextBye =
+      byeRows.find(({ bye }) => {
+        if (bye.source !== "GENERATED") return true;
+        return visibleGames.some(
+          (game) => game.scheduleWeek === bye.scheduleWeek,
+        );
+      }) ?? null;
     const attentionItems = [
       ...allGames
         .filter((game) => game.status === "PENDING_CONFIRMATION")
@@ -839,6 +1189,17 @@ router.get("/dashboard", async (_req, res, next) => {
         seasonName: season.name,
         role: user.role,
         nextGame,
+        nextBye: nextBye
+          ? {
+              id: nextBye.bye.id,
+              seasonId: nextBye.bye.seasonId,
+              teamId: nextBye.bye.teamId,
+              teamName: nextBye.team.name,
+              scheduleWeek: nextBye.bye.scheduleWeek,
+              playDate: nextBye.bye.playDate,
+              source: nextBye.bye.source,
+            }
+          : null,
         attentionItems,
         recentResults: allGames.filter((game) => game.status === "FINAL"),
       }),
@@ -1563,6 +1924,370 @@ router.get("/schedule", async (req, res, next) => {
     next(error);
   }
 });
+router.get("/schedule/byes", async (req, res, next) => {
+  try {
+    const filters = ListTeamByesQueryParams.parse(req.query);
+    const user = currentUser(req, res);
+    const season = await activeSeason();
+    const rows = await db
+      .select({ bye: teamByes, team: teams })
+      .from(teamByes)
+      .innerJoin(teams, eq(teamByes.teamId, teams.id))
+      .where(
+        and(
+          eq(teamByes.seasonId, season.id),
+          filters.teamId ? eq(teamByes.teamId, filters.teamId) : undefined,
+          filters.scheduleWeek
+            ? eq(teamByes.scheduleWeek, filters.scheduleWeek)
+            : undefined,
+        ),
+      )
+      .orderBy(asc(teamByes.scheduleWeek), asc(teamByes.playDate));
+    const activeGames = await db
+      .select()
+      .from(games)
+      .where(and(eq(games.seasonId, season.id), ne(games.status, "CANCELLED")));
+    const visible = rows.filter(({ bye }) => {
+      if (user.role === "COMMISSIONER" || bye.source !== "GENERATED")
+        return true;
+      return activeGames.some(
+        (game) =>
+          game.scheduleWeek === bye.scheduleWeek &&
+          (game.status === "PUBLISHED" ||
+            game.status === "FINAL" ||
+            game.status === "PENDING_CONFIRMATION" ||
+            game.status === "DISPUTED"),
+      );
+    });
+    return res.json(
+      ListTeamByesResponse.parse(
+        visible.map(({ bye, team }) => ({
+          id: bye.id,
+          seasonId: bye.seasonId,
+          teamId: bye.teamId,
+          teamName: team.name,
+          scheduleWeek: bye.scheduleWeek,
+          playDate: bye.playDate,
+          source: bye.source,
+        })),
+      ),
+    );
+  } catch (error) {
+    return next(error);
+  }
+});
+router.post("/schedule/byes", requireCommissioner, async (req, res, next) => {
+  try {
+    const input = CreateTeamByeBody.parse(req.body);
+    const actor = currentUser(req, res);
+    const result = await withScheduleMutationLock(async (tx) => {
+      const [season] = await tx
+        .select()
+        .from(seasons)
+        .where(eq(seasons.active, true))
+        .limit(1);
+      if (!season)
+        throw Object.assign(new Error("No active season configured"), {
+          status: 409,
+        });
+      const [team] = await tx
+        .select()
+        .from(teams)
+        .where(
+          and(
+            eq(teams.id, input.teamId),
+            eq(teams.seasonId, season.id),
+            eq(teams.active, true),
+          ),
+        )
+        .limit(1);
+      if (!team)
+        throw Object.assign(
+          new Error("Team must be active in the current season"),
+          {
+            status: 422,
+          },
+        );
+      const [conflict] = await tx
+        .select({ id: games.id })
+        .from(games)
+        .where(
+          and(
+            eq(games.seasonId, season.id),
+            ne(games.status, "CANCELLED"),
+            eq(games.scheduleWeek, input.scheduleWeek),
+            or(
+              eq(games.homeTeamId, input.teamId),
+              eq(games.awayTeamId, input.teamId),
+            ),
+          ),
+        )
+        .limit(1);
+      if (conflict)
+        throw Object.assign(new Error("Team already has a game in this week"), {
+          status: 409,
+        });
+      const [existing] = await tx
+        .select()
+        .from(teamByes)
+        .where(
+          and(
+            eq(teamByes.seasonId, season.id),
+            eq(teamByes.teamId, input.teamId),
+            eq(teamByes.scheduleWeek, input.scheduleWeek),
+          ),
+        )
+        .limit(1);
+      if (existing) {
+        if (
+          existing.source === "MANUAL" &&
+          existing.playDate === input.playDate
+        )
+          return { bye: existing, team, noOp: true };
+        throw Object.assign(
+          new Error("A bye already exists for this team and week"),
+          { status: 409 },
+        );
+      }
+      const [bye] = await tx
+        .insert(teamByes)
+        .values({
+          seasonId: season.id,
+          teamId: input.teamId,
+          scheduleWeek: input.scheduleWeek,
+          playDate: input.playDate,
+          source: "MANUAL",
+          createdByUserId: actor.id,
+        })
+        .returning();
+      if (!bye) throw new Error("Failed to create bye");
+      await tx.insert(auditEvents).values({
+        leagueId: season.leagueId,
+        actorUserId: actor.id,
+        entityType: "team_bye",
+        entityId: bye.id,
+        action: "BYE_CREATED",
+        afterData: bye,
+      });
+      return { bye, team, noOp: false };
+    });
+    return res.status(result.noOp ? 200 : 201).json(
+      CreateTeamByeResponse.parse({
+        ...result.bye,
+        teamName: result.team.name,
+      }),
+    );
+  } catch (error) {
+    return next(error);
+  }
+});
+router.delete("/schedule/byes", requireCommissioner, async (req, res, next) => {
+  try {
+    const { teamId, scheduleWeek } = DeleteTeamByeQueryParams.parse(req.query);
+    const actor = currentUser(req, res);
+    await withScheduleMutationLock(async (tx) => {
+      const [season] = await tx
+        .select()
+        .from(seasons)
+        .where(eq(seasons.active, true))
+        .limit(1);
+      if (!season)
+        throw Object.assign(new Error("No active season configured"), {
+          status: 409,
+        });
+      const [bye] = await tx
+        .select()
+        .from(teamByes)
+        .where(
+          and(
+            eq(teamByes.seasonId, season.id),
+            eq(teamByes.teamId, teamId),
+            eq(teamByes.scheduleWeek, scheduleWeek),
+          ),
+        )
+        .limit(1);
+      if (!bye) return;
+      if (bye.source === "GENERATED")
+        throw Object.assign(new Error("Generated byes cannot be removed"), {
+          status: 409,
+        });
+      await tx.delete(teamByes).where(eq(teamByes.id, bye.id));
+      await tx.insert(auditEvents).values({
+        leagueId: season.leagueId,
+        actorUserId: actor.id,
+        entityType: "team_bye",
+        entityId: bye.id,
+        action: "BYE_REMOVED",
+        beforeData: bye,
+      });
+    });
+    return res.status(204).send();
+  } catch (error) {
+    return next(error);
+  }
+});
+router.post(
+  "/schedule/byes/reconcile/preview",
+  requireCommissioner,
+  async (req, res, next) => {
+    try {
+      const user = currentUser(req, res);
+      const season = await activeSeason();
+      const activeTeams = await db
+        .select({ id: teams.id, name: teams.name })
+        .from(teams)
+        .where(and(eq(teams.seasonId, season.id), eq(teams.active, true)))
+        .orderBy(asc(teams.id));
+      const result = reconciliationPreview(
+        season.id,
+        activeTeams,
+        await apiGames(undefined, undefined, user),
+        undefined,
+        await db
+          .select({
+            teamId: teamByes.teamId,
+            scheduleWeek: teamByes.scheduleWeek,
+            playDate: teamByes.playDate,
+          })
+          .from(teamByes)
+          .where(eq(teamByes.seasonId, season.id)),
+      );
+      return res.json(PreviewByeReconciliationResponse.parse(result));
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+router.post(
+  "/schedule/byes/reconcile/commit",
+  requireCommissioner,
+  async (req, res, next) => {
+    try {
+      const input = CommitByeReconciliationBody.parse(req.body);
+      const actor = currentUser(req, res);
+      const result = await withScheduleMutationLock(async (tx) => {
+        const [season] = await tx
+          .select()
+          .from(seasons)
+          .where(eq(seasons.active, true))
+          .limit(1);
+        if (!season)
+          throw Object.assign(new Error("No active season configured"), {
+            status: 409,
+          });
+        const [prior] = await tx
+          .select()
+          .from(auditEvents)
+          .where(
+            and(
+              eq(auditEvents.entityType, "schedule"),
+              eq(auditEvents.entityId, season.id),
+              eq(auditEvents.action, "BYE_RECONCILED"),
+            ),
+          )
+          .limit(1);
+        if (
+          prior?.afterData &&
+          typeof prior.afterData === "object" &&
+          "previewHash" in prior.afterData &&
+          prior.afterData.previewHash === input.previewHash
+        )
+          return { updatedGames: 0, createdByes: 0, noOp: true };
+        const activeTeams = await tx
+          .select({ id: teams.id, name: teams.name })
+          .from(teams)
+          .where(and(eq(teams.seasonId, season.id), eq(teams.active, true)))
+          .orderBy(asc(teams.id));
+        const currentGames = await apiGames(undefined, undefined, actor, tx);
+        const currentByes = await tx
+          .select({
+            teamId: teamByes.teamId,
+            scheduleWeek: teamByes.scheduleWeek,
+            playDate: teamByes.playDate,
+          })
+          .from(teamByes)
+          .where(eq(teamByes.seasonId, season.id));
+        const analysis = reconciliationPreview(
+          season.id,
+          activeTeams,
+          currentGames,
+          undefined,
+          currentByes,
+        );
+        if (analysis.previewHash !== input.previewHash)
+          throw Object.assign(
+            new Error("Schedule changed since reconciliation preview"),
+            { status: 409 },
+          );
+        if (!analysis.canCommit)
+          throw Object.assign(
+            new Error(
+              analysis.weeks.flatMap((week) => week.blockers).join("; ") ||
+                "Reconciliation is blocked",
+            ),
+            { status: 409 },
+          );
+        let updatedGames = 0;
+        let createdByes = 0;
+        for (const week of analysis.weeks) {
+          for (const game of week.games) {
+            if (game.scheduleWeek === null) {
+              await tx
+                .update(games)
+                .set({ scheduleWeek: week.scheduleWeek })
+                .where(eq(games.id, game.id));
+              updatedGames += 1;
+            } else if (game.scheduleWeek !== week.scheduleWeek) {
+              throw Object.assign(
+                new Error(`Game ${game.id} has a conflicting schedule week`),
+                { status: 409 },
+              );
+            }
+          }
+          for (const bye of week.byes) {
+            const [existing] = await tx
+              .select()
+              .from(teamByes)
+              .where(
+                and(
+                  eq(teamByes.seasonId, season.id),
+                  eq(teamByes.teamId, bye.teamId),
+                  eq(teamByes.scheduleWeek, bye.scheduleWeek),
+                ),
+              )
+              .limit(1);
+            if (existing) continue;
+            await tx.insert(teamByes).values({
+              seasonId: season.id,
+              teamId: bye.teamId,
+              scheduleWeek: bye.scheduleWeek,
+              playDate: bye.playDate,
+              source: "RECONCILED",
+              createdByUserId: actor.id,
+            });
+            createdByes += 1;
+          }
+        }
+        await tx.insert(auditEvents).values({
+          leagueId: season.leagueId,
+          actorUserId: actor.id,
+          entityType: "schedule",
+          entityId: season.id,
+          action: "BYE_RECONCILED",
+          afterData: {
+            previewHash: input.previewHash,
+            updatedGames,
+            createdByes,
+          },
+        });
+        return { updatedGames, createdByes, noOp: false };
+      });
+      return res.json(CommitByeReconciliationResponse.parse(result));
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
 router.post(
   "/schedule/generator/preview",
   requireCommissioner,
@@ -1573,6 +2298,7 @@ router.post(
       const result = generateSchedule(
         generatorInput(input, context, context.existingGames),
       );
+      await validateGeneratedByePlan(db, context.season.id, result);
       const previewHash = scheduleGeneratorHash(
         generatorInput(input, context, context.existingGames),
         result,
@@ -1618,6 +2344,7 @@ router.post(
         const generated = generateSchedule(
           generatorInput(input, context, context.existingGames),
         );
+        await validateGeneratedByePlan(tx, context.season.id, generated);
         const previewHash = scheduleGeneratorHash(
           generatorInput(input, context, context.existingGames),
           generated,
@@ -1641,11 +2368,61 @@ router.post(
             ...schedule,
             seasonId: season.id,
             scheduledAt: new Date(schedule.scheduledAt),
+            scheduleWeek: planned.scheduleWeek,
             status: "DRAFT",
           } satisfies typeof games.$inferInsert;
           const [game] = await tx.insert(games).values(draftValues).returning();
           if (!game) throw new Error("Failed to create generated game");
           created.push(game);
+        }
+        for (const bye of generated.byes) {
+          const [conflict] = await tx
+            .select({ id: games.id })
+            .from(games)
+            .where(
+              and(
+                eq(games.seasonId, context.season.id),
+                ne(games.status, "CANCELLED"),
+                eq(games.scheduleWeek, bye.scheduleWeek),
+                or(
+                  eq(games.homeTeamId, bye.teamId),
+                  eq(games.awayTeamId, bye.teamId),
+                ),
+              ),
+            )
+            .limit(1);
+          if (conflict)
+            throw Object.assign(
+              new Error("A team cannot have a game and bye in the same week"),
+              { status: 409 },
+            );
+          const [existingBye] = await tx
+            .select()
+            .from(teamByes)
+            .where(
+              and(
+                eq(teamByes.seasonId, context.season.id),
+                eq(teamByes.teamId, bye.teamId),
+                eq(teamByes.scheduleWeek, bye.scheduleWeek),
+              ),
+            )
+            .limit(1);
+          if (existingBye) {
+            if (existingBye.playDate !== bye.playDate)
+              throw Object.assign(
+                new Error("Existing bye has a conflicting play date"),
+                { status: 409 },
+              );
+            continue;
+          }
+          await tx.insert(teamByes).values({
+            seasonId: context.season.id,
+            teamId: bye.teamId,
+            scheduleWeek: bye.scheduleWeek,
+            playDate: bye.playDate,
+            source: "GENERATED",
+            createdByUserId: actor.id,
+          });
         }
         await tx.insert(auditEvents).values({
           leagueId: context.league.id,
@@ -1741,7 +2518,7 @@ router.patch(
             new Error("Only draft or published games can be edited"),
             { status: 409 },
           );
-        await validateGameInput(tx, input, gameId);
+        await validateGameInput(tx, input, gameId, before.scheduleWeek);
         const [game] = await tx
           .update(games)
           .set({ ...input, scheduledAt: new Date(input.scheduledAt) })

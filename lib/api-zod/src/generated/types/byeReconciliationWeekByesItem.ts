@@ -6,10 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ScheduleGeneratorPreviewByesItem = {
-  round: number;
-  scheduleWeek: number;
+export type ByeReconciliationWeekByesItem = {
   teamId: number;
+  teamName: string;
+  scheduleWeek: number;
   /** @pattern ^\d{4}-\d{2}-\d{2}$ */
   playDate: string;
 };

@@ -12,6 +12,7 @@ export type GeneratorGame = {
   date: string;
   time: string;
   round: number;
+  scheduleWeek: number;
 };
 
 export type GeneratorExistingGame = {
@@ -36,7 +37,12 @@ export type ScheduleGeneratorInput = {
 
 export type ScheduleGeneratorResult = {
   games: GeneratorGame[];
-  byes: Array<{ round: number; teamId: number }>;
+  byes: Array<{
+    round: number;
+    scheduleWeek: number;
+    teamId: number;
+    playDate: string;
+  }>;
   gamesPerTeam: Record<string, number>;
   homeAway: Record<string, { home: number; away: number }>;
   playDatesUsed: string[];
@@ -216,7 +222,12 @@ export function generateSchedule(
   if (rotation.length % 2) rotation.push(null);
   const rounds = rotation.length - 1;
   const pairings: Array<{ home: number; away: number; round: number }> = [];
-  const byes: Array<{ round: number; teamId: number }> = [];
+  const byes: Array<{
+    round: number;
+    scheduleWeek: number;
+    teamId: number;
+    playDate: string;
+  }> = [];
   const orientation = new Map<number, { home: number; away: number }>();
   for (const team of teams) orientation.set(team.id, { home: 0, away: 0 });
   const orientationScore = (home: number, away: number) => {
@@ -239,7 +250,13 @@ export function generateSchedule(
       const second = rotation[rotation.length - 1 - index];
       if (!first || !second) {
         const bye = first ?? second;
-        if (bye) byes.push({ round: round + 1, teamId: bye.id });
+        if (bye)
+          byes.push({
+            round: round + 1,
+            scheduleWeek: round + 1,
+            teamId: bye.id,
+            playDate: "",
+          });
         continue;
       }
       const firstScore = orientationScore(first.id, second.id);
@@ -273,7 +290,13 @@ export function generateSchedule(
         round: pair.round + rounds,
       })),
     );
-    byes.push(...byes.map((bye) => ({ ...bye, round: bye.round + rounds })));
+    byes.push(
+      ...byes.map((bye) => ({
+        ...bye,
+        round: bye.round + rounds,
+        scheduleWeek: bye.scheduleWeek + rounds,
+      })),
+    );
   }
 
   const scheduled: GeneratorGame[] = [];
@@ -295,61 +318,84 @@ export function generateSchedule(
       );
   }
 
-  for (const pairing of pairings) {
-    const pairKey = pairingKey(pairing.home, pairing.away);
-    if (format === "SINGLE" && usedPairings.has(pairKey))
+  const totalRounds = rounds * (format === "DOUBLE" ? 2 : 1);
+  for (let round = 1; round <= totalRounds; round += 1) {
+    const roundPairings = pairings.filter((pairing) => pairing.round === round);
+    for (const pairing of roundPairings) {
+      const pairKey = pairingKey(pairing.home, pairing.away);
+      if (format === "SINGLE" && usedPairings.has(pairKey))
+        throw new ScheduleGeneratorError(
+          `The generated schedule contains a duplicate matchup for pair ${pairKey}.`,
+          "CONFLICT",
+        );
+      usedPairings.add(pairKey);
+    }
+    let committedRound: GeneratorGame[] | undefined;
+    let committedDate = "";
+    for (const date of uniqueDates) {
+      const tentative: GeneratorGame[] = [];
+      const tentativeCounts = new Map<string, number>();
+      const tentativeOccupied = (teamId: number) =>
+        (gamesByTeamDate.get(`${teamId}:${date}`) ?? 0) +
+        (tentativeCounts.get(`${teamId}:${date}`) ?? 0);
+      for (const pairing of roundPairings) {
+        const slot = slots.find((candidate) => {
+          if (candidate.date !== date) return false;
+          const at = new Date(candidate.scheduledAt);
+          if (
+            tentativeOccupied(pairing.home) >= maxMatchesPerTeamPerDate ||
+            tentativeOccupied(pairing.away) >= maxMatchesPerTeamPerDate
+          )
+            return false;
+          return ![...scheduled, ...tentative, ...existing].some(
+            (game) =>
+              (game.homeTeamId === pairing.home ||
+                game.awayTeamId === pairing.home ||
+                game.homeTeamId === pairing.away ||
+                game.awayTeamId === pairing.away ||
+                game.courtId === candidate.courtId) &&
+              overlaps(at, new Date(game.scheduledAt)),
+          );
+        });
+        if (!slot) break;
+        tentative.push({
+          homeTeamId: pairing.home,
+          awayTeamId: pairing.away,
+          scheduledAt: slot.scheduledAt,
+          courtId: slot.courtId,
+          date: slot.date,
+          time: slot.time,
+          round,
+          scheduleWeek: round,
+        });
+        for (const teamId of [pairing.home, pairing.away])
+          tentativeCounts.set(
+            `${teamId}:${date}`,
+            (tentativeCounts.get(`${teamId}:${date}`) ?? 0) + 1,
+          );
+      }
+      if (tentative.length === roundPairings.length) {
+        committedRound = tentative;
+        committedDate = date;
+        break;
+      }
+    }
+    if (!committedRound) {
       throw new ScheduleGeneratorError(
-        `The generated schedule contains a duplicate matchup for pair ${pairKey}.`,
-        "CONFLICT",
-      );
-    usedPairings.add(pairKey);
-    const slot = slots.find((candidate) => {
-      const at = new Date(candidate.scheduledAt);
-      if (
-        occupied(pairing.home, candidate.date) >= maxMatchesPerTeamPerDate ||
-        occupied(pairing.away, candidate.date) >= maxMatchesPerTeamPerDate
-      )
-        return false;
-      if (
-        [...scheduled, ...existing].some(
-          (game) =>
-            (game.homeTeamId === pairing.home ||
-              game.awayTeamId === pairing.home ||
-              game.homeTeamId === pairing.away ||
-              game.awayTeamId === pairing.away ||
-              game.courtId === candidate.courtId) &&
-            overlaps(at, new Date(game.scheduledAt)),
-        )
-      )
-        return false;
-      return true;
-    });
-    if (!slot) {
-      const required = pairings.length;
-      const available = slots.length;
-      throw new ScheduleGeneratorError(
-        `Insufficient schedule capacity: ${required} matches required but only ${available} court slots are available after existing-game and team constraints.`,
+        `Insufficient schedule capacity: ${pairings.length} matches required; round ${round} cannot fit on one eligible play date after existing-game and team constraints.`,
         "CAPACITY",
       );
     }
-    const game: GeneratorGame = {
-      homeTeamId: pairing.home,
-      awayTeamId: pairing.away,
-      scheduledAt: slot.scheduledAt,
-      courtId: slot.courtId,
-      date: slot.date,
-      time: slot.time,
-      round: pairing.round,
-    };
-    scheduled.push(game);
-    gamesByTeamDate.set(
-      `${pairing.home}:${slot.date}`,
-      occupied(pairing.home, slot.date) + 1,
-    );
-    gamesByTeamDate.set(
-      `${pairing.away}:${slot.date}`,
-      occupied(pairing.away, slot.date) + 1,
-    );
+    scheduled.push(...committedRound);
+    for (const game of committedRound) {
+      for (const teamId of [game.homeTeamId, game.awayTeamId])
+        gamesByTeamDate.set(
+          `${teamId}:${committedDate}`,
+          occupied(teamId, committedDate) + 1,
+        );
+    }
+    for (const bye of byes)
+      if (bye.scheduleWeek === round) bye.playDate = committedDate;
   }
 
   const gamesPerTeam: Record<string, number> = {};

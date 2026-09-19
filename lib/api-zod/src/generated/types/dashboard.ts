@@ -7,12 +7,14 @@
  */
 import type { DashboardRole } from './dashboardRole';
 import type { Game } from './game';
+import type { TeamBye } from './teamBye';
 
 export interface Dashboard {
   leagueName: string;
   seasonName: string;
   role: DashboardRole;
   nextGame: Game | null;
+  nextBye: TeamBye | null;
   attentionItems: string[];
   recentResults: Game[];
 }
