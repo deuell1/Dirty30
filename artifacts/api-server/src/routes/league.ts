@@ -21,6 +21,10 @@ import {
   ListGamesQueryParams,
   ListGamesResponse,
   ListTeamsResponse,
+  CommitScheduleGeneratorBody,
+  CommitScheduleGeneratorResponse,
+  PreviewScheduleGeneratorBody,
+  PreviewScheduleGeneratorResponse,
   SubmitScoreBody,
   SubmitScoreParams,
   SubmitScoreResponse,
@@ -55,6 +59,13 @@ import {
 } from "../services/rosterCapacity";
 import { normalizeUsPhone } from "../lib/phone";
 import { canCommissionerDirectScore } from "../services/scorePolicy";
+import {
+  generateSchedule,
+  localDateInTimeZone,
+  scheduleGeneratorHash,
+  type GeneratorExistingGame,
+  type ScheduleGeneratorInput,
+} from "../services/schedule-generator";
 
 type ApiGame = {
   id: number;
@@ -432,11 +443,13 @@ async function validateGameInput(
       status: 409,
     });
   const startsAt = new Date(input.scheduledAt);
-  if (
-    Number.isNaN(startsAt.getTime()) ||
-    startsAt.toISOString().slice(0, 10) < season.startDate ||
-    startsAt.toISOString().slice(0, 10) > season.endDate
-  )
+  if (Number.isNaN(startsAt.getTime()))
+    throw Object.assign(
+      new Error("Game time must be within the active season"),
+      { status: 422 },
+    );
+  const localDate = localDateInTimeZone(startsAt);
+  if (localDate < season.startDate || localDate > season.endDate)
     throw Object.assign(
       new Error("Game time must be within the active season"),
       { status: 422 },
@@ -533,6 +546,178 @@ async function withScheduleMutationLock<T>(
   return db.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(30030)`);
     return operation(tx);
+  });
+}
+
+function generatorDate(value: Date) {
+  return value.toISOString().slice(0, 10);
+}
+
+function parseGeneratorBody<T>(
+  schema: { parse: (value: unknown) => T },
+  body: unknown,
+) {
+  try {
+    return schema.parse(body);
+  } catch (error) {
+    throw Object.assign(
+      new Error(
+        error instanceof Error ? error.message : "Invalid generator input",
+      ),
+      { status: 422 },
+    );
+  }
+}
+
+function eligibleGeneratorDates(
+  firstPlayDate: Date,
+  endDate: string,
+  weekdays: number[],
+) {
+  const dates: string[] = [];
+  const cursor = new Date(firstPlayDate);
+  cursor.setUTCHours(0, 0, 0, 0);
+  const allowed = new Set(weekdays);
+  while (generatorDate(cursor) <= endDate) {
+    if (allowed.has(cursor.getUTCDay())) dates.push(generatorDate(cursor));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return dates;
+}
+
+async function generatorContext(
+  database: Pick<ScheduleTransaction, "select">,
+  input: {
+    venueId: number;
+    courtIds: number[];
+    firstPlayDate: Date;
+    weekdays: number[];
+  },
+) {
+  const [league] = await database
+    .select()
+    .from(leagues)
+    .where(eq(leagues.active, true))
+    .limit(1);
+  const season = league
+    ? (
+        await database
+          .select()
+          .from(seasons)
+          .where(and(eq(seasons.leagueId, league.id), eq(seasons.active, true)))
+          .limit(1)
+      )[0]
+    : undefined;
+  if (!league || !season)
+    throw Object.assign(new Error("No active league and season configured"), {
+      status: 409,
+    });
+  const firstDate = generatorDate(input.firstPlayDate);
+  if (firstDate < season.startDate || firstDate > season.endDate)
+    throw Object.assign(
+      new Error("First play date must be within the active season"),
+      { status: 422 },
+    );
+  const activeTeams = await database
+    .select({ id: teams.id, name: teams.name })
+    .from(teams)
+    .where(and(eq(teams.seasonId, season.id), eq(teams.active, true)))
+    .orderBy(asc(teams.name), asc(teams.id));
+  const [venue] = await database
+    .select()
+    .from(venues)
+    .where(
+      and(
+        eq(venues.id, input.venueId),
+        eq(venues.leagueId, league.id),
+        eq(venues.active, true),
+      ),
+    )
+    .limit(1);
+  if (!venue)
+    throw Object.assign(new Error("Selected venue must be active"), {
+      status: 422,
+    });
+  if (new Set(input.courtIds).size !== input.courtIds.length)
+    throw Object.assign(new Error("Selected courts must be unique"), {
+      status: 422,
+    });
+  const activeCourts = await database
+    .select({ id: courts.id, name: courts.name })
+    .from(courts)
+    .where(
+      and(
+        eq(courts.venueId, venue.id),
+        eq(courts.active, true),
+        inArray(courts.id, input.courtIds),
+      ),
+    )
+    .orderBy(asc(courts.id));
+  if (activeCourts.length !== input.courtIds.length)
+    throw Object.assign(
+      new Error("Every selected court must be active at the selected venue"),
+      { status: 422 },
+    );
+  const existingGames = await database
+    .select({
+      homeTeamId: games.homeTeamId,
+      awayTeamId: games.awayTeamId,
+      courtId: games.courtId,
+      scheduledAt: games.scheduledAt,
+      status: games.status,
+    })
+    .from(games)
+    .where(and(eq(games.seasonId, season.id), ne(games.status, "CANCELLED")));
+  const playDates = eligibleGeneratorDates(
+    input.firstPlayDate,
+    season.endDate,
+    input.weekdays,
+  );
+  return {
+    league,
+    season,
+    activeTeams,
+    activeCourts,
+    existingGames,
+    playDates,
+  };
+}
+
+function generatorInput(
+  input: z.infer<typeof PreviewScheduleGeneratorBody>,
+  context: Awaited<ReturnType<typeof generatorContext>>,
+  existingGames: GeneratorExistingGame[] = context.existingGames,
+) {
+  return {
+    teams: context.activeTeams,
+    format: input.format,
+    venueId: input.venueId,
+    playDates: context.playDates,
+    timeSlots: input.timeSlots,
+    courts: context.activeCourts,
+    maxMatchesPerTeamPerDate: input.maxMatchesPerTeamPerDate ?? 1,
+    existingGames,
+  } satisfies ScheduleGeneratorInput;
+}
+
+function generatorResponse(
+  format: "SINGLE" | "DOUBLE",
+  context: Awaited<ReturnType<typeof generatorContext>>,
+  result: ReturnType<typeof generateSchedule>,
+  previewHash: string,
+) {
+  return PreviewScheduleGeneratorResponse.parse({
+    format,
+    previewHash,
+    teamCount: context.activeTeams.length,
+    teamNames: context.activeTeams.map((team) => team.name),
+    totalMatches: result.games.length,
+    playDatesUsed: result.playDatesUsed,
+    gamesPerTeam: result.gamesPerTeam,
+    homeAway: result.homeAway,
+    byes: result.byes,
+    games: result.games,
+    warnings: result.warnings,
   });
 }
 
@@ -1378,6 +1563,116 @@ router.get("/schedule", async (req, res, next) => {
     next(error);
   }
 });
+router.post(
+  "/schedule/generator/preview",
+  requireCommissioner,
+  async (req, res, next) => {
+    try {
+      const input = parseGeneratorBody(PreviewScheduleGeneratorBody, req.body);
+      const context = await generatorContext(db, input);
+      const result = generateSchedule(
+        generatorInput(input, context, context.existingGames),
+      );
+      const previewHash = scheduleGeneratorHash(
+        generatorInput(input, context, context.existingGames),
+        result,
+      );
+      return res.json(
+        generatorResponse(input.format, context, result, previewHash),
+      );
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+router.post(
+  "/schedule/generator/commit",
+  requireCommissioner,
+  async (req, res, next) => {
+    try {
+      const input = parseGeneratorBody(CommitScheduleGeneratorBody, req.body);
+      const actor = currentUser(req, res);
+      const committed = await withScheduleMutationLock(async (tx) => {
+        const context = await generatorContext(tx, input);
+        const priorBatches = await tx
+          .select()
+          .from(auditEvents)
+          .where(
+            and(
+              eq(auditEvents.leagueId, context.league.id),
+              eq(auditEvents.entityType, "schedule"),
+              eq(auditEvents.entityId, context.season.id),
+              eq(auditEvents.action, "BATCH_CREATED"),
+            ),
+          );
+        if (
+          priorBatches.some(
+            (batch) =>
+              batch.afterData &&
+              typeof batch.afterData === "object" &&
+              "previewHash" in batch.afterData &&
+              batch.afterData.previewHash === input.previewHash,
+          )
+        )
+          return { createdCount: 0, noOp: true };
+        const generated = generateSchedule(
+          generatorInput(input, context, context.existingGames),
+        );
+        const previewHash = scheduleGeneratorHash(
+          generatorInput(input, context, context.existingGames),
+          generated,
+        );
+        if (previewHash !== input.previewHash)
+          throw Object.assign(
+            new Error("Schedule changed since preview; preview again"),
+            { status: 409 },
+          );
+        const created = [];
+        for (const planned of generated.games) {
+          const schedule = {
+            homeTeamId: planned.homeTeamId,
+            awayTeamId: planned.awayTeamId,
+            venueId: input.venueId,
+            courtId: planned.courtId,
+            scheduledAt: planned.scheduledAt,
+          };
+          const season = await validateGameInput(tx, schedule);
+          const draftValues = {
+            ...schedule,
+            seasonId: season.id,
+            scheduledAt: new Date(schedule.scheduledAt),
+            status: "DRAFT",
+          } satisfies typeof games.$inferInsert;
+          const [game] = await tx.insert(games).values(draftValues).returning();
+          if (!game) throw new Error("Failed to create generated game");
+          created.push(game);
+        }
+        await tx.insert(auditEvents).values({
+          leagueId: context.league.id,
+          actorUserId: actor.id,
+          entityType: "schedule",
+          entityId: context.season.id,
+          action: "BATCH_CREATED",
+          afterData: {
+            createdCount: created.length,
+            format: input.format,
+            playDatesUsed: generated.playDatesUsed,
+            previewHash,
+          },
+        });
+        return { createdCount: created.length, noOp: false };
+      });
+      return res.status(committed.noOp ? 200 : 201).json(
+        CommitScheduleGeneratorResponse.parse({
+          createdCount: committed.createdCount,
+          noOp: committed.noOp,
+        }),
+      );
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
 router.get("/schedule/:gameId", async (req, res, next) => {
   try {
     const { gameId } = GetGameParams.parse(req.params);

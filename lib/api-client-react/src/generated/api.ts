@@ -39,6 +39,10 @@ import type {
   ListGamesParams,
   Player,
   ProfileInput,
+  ScheduleGeneratorCommitInput,
+  ScheduleGeneratorCommitResult,
+  ScheduleGeneratorInput,
+  ScheduleGeneratorPreview,
   Score,
   ScoreInput,
   Standing,
@@ -1614,6 +1618,148 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getUpdateGameMutationOptions(options));
+    }
+
+export const getPreviewScheduleGeneratorUrl = () => {
+
+
+
+
+  return `/api/schedule/generator/preview`
+}
+
+/**
+ * @summary Preview a deterministic draft schedule
+ */
+export const previewScheduleGenerator = async (scheduleGeneratorInput: ScheduleGeneratorInput, options?: Parameters<typeof customFetch>[1]): Promise<ScheduleGeneratorPreview> => {
+
+  return customFetch<ScheduleGeneratorPreview>(getPreviewScheduleGeneratorUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(scheduleGeneratorInput)
+  }
+);}
+
+
+
+
+
+export const getPreviewScheduleGeneratorMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewScheduleGenerator>>, TError,{data: BodyType<ScheduleGeneratorInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof previewScheduleGenerator>>, TError,{data: BodyType<ScheduleGeneratorInput>}, TContext> => {
+
+const mutationKey = ['previewScheduleGenerator'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof previewScheduleGenerator>>, {data: BodyType<ScheduleGeneratorInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  previewScheduleGenerator(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PreviewScheduleGeneratorMutationResult = NonNullable<Awaited<ReturnType<typeof previewScheduleGenerator>>>
+    export type PreviewScheduleGeneratorMutationBody = BodyType<ScheduleGeneratorInput>
+    export type PreviewScheduleGeneratorMutationError = ErrorType<void>
+
+    /**
+ * @summary Preview a deterministic draft schedule
+ */
+export const usePreviewScheduleGenerator = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewScheduleGenerator>>, TError,{data: BodyType<ScheduleGeneratorInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof previewScheduleGenerator>>,
+        TError,
+        {data: BodyType<ScheduleGeneratorInput>},
+        TContext
+      > => {
+      return useMutation(getPreviewScheduleGeneratorMutationOptions(options));
+    }
+
+export const getCommitScheduleGeneratorUrl = () => {
+
+
+
+
+  return `/api/schedule/generator/commit`
+}
+
+/**
+ * @summary Create a generated schedule as unpublished drafts
+ */
+export const commitScheduleGenerator = async (scheduleGeneratorCommitInput: ScheduleGeneratorCommitInput, options?: Parameters<typeof customFetch>[1]): Promise<ScheduleGeneratorCommitResult> => {
+
+  return customFetch<ScheduleGeneratorCommitResult>(getCommitScheduleGeneratorUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(scheduleGeneratorCommitInput)
+  }
+);}
+
+
+
+
+
+export const getCommitScheduleGeneratorMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof commitScheduleGenerator>>, TError,{data: BodyType<ScheduleGeneratorCommitInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof commitScheduleGenerator>>, TError,{data: BodyType<ScheduleGeneratorCommitInput>}, TContext> => {
+
+const mutationKey = ['commitScheduleGenerator'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof commitScheduleGenerator>>, {data: BodyType<ScheduleGeneratorCommitInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  commitScheduleGenerator(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CommitScheduleGeneratorMutationResult = NonNullable<Awaited<ReturnType<typeof commitScheduleGenerator>>>
+    export type CommitScheduleGeneratorMutationBody = BodyType<ScheduleGeneratorCommitInput>
+    export type CommitScheduleGeneratorMutationError = ErrorType<void>
+
+    /**
+ * @summary Create a generated schedule as unpublished drafts
+ */
+export const useCommitScheduleGenerator = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof commitScheduleGenerator>>, TError,{data: BodyType<ScheduleGeneratorCommitInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof commitScheduleGenerator>>,
+        TError,
+        {data: BodyType<ScheduleGeneratorCommitInput>},
+        TContext
+      > => {
+      return useMutation(getCommitScheduleGeneratorMutationOptions(options));
     }
 
 export const getPublishGameUrl = (gameId: number,) => {

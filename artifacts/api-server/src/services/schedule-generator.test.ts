@@ -1,0 +1,335 @@
+import { describe, expect, it } from "vitest";
+import {
+  generateSchedule,
+  localDateInTimeZone,
+  scheduleGeneratorHash,
+  type ScheduleGeneratorInput,
+} from "./schedule-generator";
+
+const teams = (count: number) =>
+  Array.from({ length: count }, (_, index) => ({
+    id: index + 1,
+    name: `Team ${index + 1}`,
+  }));
+const overlapsAt = (left: Date, right: Date) =>
+  right.getTime() < left.getTime() + 90 * 60_000 &&
+  right.getTime() > left.getTime() - 90 * 60_000;
+
+const input = (overrides: Partial<ScheduleGeneratorInput> = {}) =>
+  ({
+    teams: teams(4),
+    format: "SINGLE",
+    playDates: [
+      "2026-09-01",
+      "2026-09-02",
+      "2026-09-03",
+      "2026-09-04",
+      "2026-09-05",
+    ],
+    timeSlots: ["18:00", "19:00"],
+    courts: [{ id: 1 }, { id: 2 }],
+    maxMatchesPerTeamPerDate: 1,
+    ...overrides,
+  }) satisfies ScheduleGeneratorInput;
+
+describe("deterministic schedule generator", () => {
+  it("creates six unique matchups for a four-team single round robin", () => {
+    const result = generateSchedule(input());
+    expect(result.games).toHaveLength(6);
+    expect(
+      new Set(
+        result.games.map((game) =>
+          [game.homeTeamId, game.awayTeamId].sort().join("-"),
+        ),
+      ),
+    ).toHaveLength(6);
+    expect(Object.values(result.gamesPerTeam)).toEqual([3, 3, 3, 3]);
+  });
+
+  it("creates twelve reversed matchups for a double round robin", () => {
+    const result = generateSchedule(
+      input({
+        format: "DOUBLE",
+        playDates: [
+          "2026-09-01",
+          "2026-09-02",
+          "2026-09-03",
+          "2026-09-04",
+          "2026-09-05",
+          "2026-09-06",
+          "2026-09-07",
+        ],
+      }),
+    );
+    expect(result.games).toHaveLength(12);
+    const directions = new Map<string, Set<string>>();
+    for (const game of result.games) {
+      const key = [game.homeTeamId, game.awayTeamId].sort().join("-");
+      const values = directions.get(key) ?? new Set<string>();
+      values.add(`${game.homeTeamId}-${game.awayTeamId}`);
+      directions.set(key, values);
+    }
+    expect([...directions.values()].every((values) => values.size === 2)).toBe(
+      true,
+    );
+  });
+
+  it("adds byes for an odd team count without self-matchups", () => {
+    const result = generateSchedule(
+      input({
+        teams: teams(3),
+        playDates: ["2026-09-01", "2026-09-02", "2026-09-03"],
+      }),
+    );
+    expect(result.games).toHaveLength(3);
+    expect(result.byes).toHaveLength(3);
+    expect(
+      result.games.every((game) => game.homeTeamId !== game.awayTeamId),
+    ).toBe(true);
+  });
+
+  it("duplicates odd-team byes across both double-round halves", () => {
+    const result = generateSchedule(
+      input({
+        teams: teams(3),
+        format: "DOUBLE",
+        playDates: Array.from(
+          { length: 8 },
+          (_, index) => `2026-09-${String(index + 1).padStart(2, "0")}`,
+        ),
+      }),
+    );
+    expect(result.byes).toHaveLength(6);
+    expect(result.byes.filter((bye) => bye.round > 3)).toHaveLength(3);
+  });
+
+  it("respects one game per team per date and prevents overlapping slots", () => {
+    const result = generateSchedule(
+      input({
+        playDates: [
+          "2026-09-01",
+          "2026-09-02",
+          "2026-09-03",
+          "2026-09-04",
+          "2026-09-05",
+          "2026-09-06",
+          "2026-09-07",
+        ],
+        timeSlots: ["18:00"],
+        courts: [{ id: 1 }, { id: 2 }],
+      }),
+    );
+    const perDate = new Map<string, number>();
+    for (const game of result.games) {
+      for (const teamId of [game.homeTeamId, game.awayTeamId]) {
+        const key = `${teamId}:${game.date}`;
+        perDate.set(key, (perDate.get(key) ?? 0) + 1);
+      }
+    }
+    expect(Math.max(...perDate.values())).toBe(1);
+    const byStart = new Map<string, Set<number>>();
+    const byCourt = new Map<string, number>();
+    for (const game of result.games) {
+      const teamsAtStart = byStart.get(game.scheduledAt) ?? new Set<number>();
+      expect(teamsAtStart.has(game.homeTeamId)).toBe(false);
+      expect(teamsAtStart.has(game.awayTeamId)).toBe(false);
+      teamsAtStart.add(game.homeTeamId);
+      teamsAtStart.add(game.awayTeamId);
+      byStart.set(game.scheduledAt, teamsAtStart);
+      const courtKey = `${game.courtId}:${game.scheduledAt}`;
+      byCourt.set(courtKey, (byCourt.get(courtKey) ?? 0) + 1);
+    }
+    expect(Math.max(...byCourt.values())).toBe(1);
+  });
+
+  it("supports two matches per team per date without overlap", () => {
+    const result = generateSchedule(
+      input({
+        playDates: ["2026-09-01", "2026-09-02"],
+        timeSlots: ["18:00", "19:30"],
+        maxMatchesPerTeamPerDate: 2,
+      }),
+    );
+    const perDate = new Map<string, number>();
+    for (const game of result.games) {
+      for (const teamId of [game.homeTeamId, game.awayTeamId]) {
+        const key = `${teamId}:${game.date}`;
+        perDate.set(key, (perDate.get(key) ?? 0) + 1);
+      }
+    }
+    expect(Math.max(...perDate.values())).toBe(2);
+    expect(
+      result.games.every((game, index, games) =>
+        games
+          .slice(0, index)
+          .every(
+            (other) =>
+              other.courtId !== game.courtId ||
+              !overlapsAt(
+                new Date(other.scheduledAt),
+                new Date(game.scheduledAt),
+              ),
+          ),
+      ),
+    ).toBe(true);
+  });
+
+  it("is deterministic and keeps home/away counts balanced", () => {
+    const first = generateSchedule(input());
+    const second = generateSchedule(input());
+    expect(second).toEqual(first);
+    for (const counts of Object.values(first.homeAway))
+      expect(Math.abs(counts.home - counts.away)).toBeLessThanOrEqual(1);
+  });
+
+  it("counts existing games against daily team caps", () => {
+    const result = generateSchedule(
+      input({
+        playDates: [
+          "2026-09-01",
+          "2026-09-02",
+          "2026-09-03",
+          "2026-09-04",
+          "2026-09-05",
+          "2026-09-06",
+          "2026-09-07",
+        ],
+        existingGames: [
+          {
+            homeTeamId: 1,
+            awayTeamId: 3,
+            courtId: 1,
+            scheduledAt: "2026-09-01T23:00:00.000Z",
+          },
+        ],
+      }),
+    );
+    expect(
+      result.games.some(
+        (game) =>
+          game.date === "2026-09-01" &&
+          (game.homeTeamId === 1 || game.awayTeamId === 1),
+      ),
+    ).toBe(false);
+  });
+
+  it("hashes validated inputs and plans deterministically", () => {
+    const generatorInput = input({
+      playDates: [
+        "2026-09-01",
+        "2026-09-02",
+        "2026-09-03",
+        "2026-09-04",
+        "2026-09-05",
+        "2026-09-06",
+        "2026-09-07",
+      ],
+    });
+    const result = generateSchedule(generatorInput);
+    const hash = scheduleGeneratorHash(generatorInput, result);
+    expect(hash).toMatch(/^[a-f0-9]{64}$/);
+    expect(scheduleGeneratorHash(generatorInput, result)).toBe(hash);
+    expect(
+      scheduleGeneratorHash(
+        { ...generatorInput, timeSlots: ["19:00"] },
+        generateSchedule({ ...generatorInput, timeSlots: ["19:00"] }),
+      ),
+    ).not.toBe(hash);
+    expect(
+      scheduleGeneratorHash(
+        { ...generatorInput, format: "DOUBLE" },
+        generateSchedule({ ...generatorInput, format: "DOUBLE" }),
+      ),
+    ).not.toBe(hash);
+  });
+
+  it("uses league-local dates across season boundaries and DST", () => {
+    expect(localDateInTimeZone("2026-11-01T05:30:00.000Z")).toBe("2026-11-01");
+    expect(localDateInTimeZone("2027-01-01T05:30:00.000Z")).toBe("2026-12-31");
+  });
+
+  it.each([
+    [4, "SINGLE" as const],
+    [5, "SINGLE" as const],
+    [6, "SINGLE" as const],
+    [4, "DOUBLE" as const],
+    [5, "DOUBLE" as const],
+    [6, "DOUBLE" as const],
+  ])("balances home/away for %i teams in %s format", (teamCount, format) => {
+    const dates = Array.from(
+      { length: 20 },
+      (_, index) => `2026-10-${String(index + 1).padStart(2, "0")}`,
+    );
+    const result = generateSchedule(
+      input({
+        teams: teams(teamCount),
+        format,
+        playDates: dates,
+        maxMatchesPerTeamPerDate: 2,
+      }),
+    );
+    for (const counts of Object.values(result.homeAway))
+      expect(Math.abs(counts.home - counts.away)).toBeLessThanOrEqual(1);
+  });
+
+  it("rejects an existing team-only conflict", () => {
+    expect(() =>
+      generateSchedule(
+        input({
+          teams: teams(2),
+          playDates: ["2026-09-01"],
+          timeSlots: ["18:00"],
+          courts: [{ id: 1 }, { id: 2 }],
+          existingGames: [
+            {
+              homeTeamId: 1,
+              awayTeamId: 3,
+              courtId: 2,
+              scheduledAt: "2026-09-01T23:00:00.000Z",
+            },
+          ],
+        }),
+      ),
+    ).toThrowError(expect.objectContaining({ status: 409 }));
+  });
+
+  it("rejects an existing court-only conflict", () => {
+    expect(() =>
+      generateSchedule(
+        input({
+          teams: teams(2),
+          playDates: ["2026-09-01"],
+          timeSlots: ["18:00"],
+          courts: [{ id: 1 }],
+          existingGames: [
+            {
+              homeTeamId: 3,
+              awayTeamId: 4,
+              courtId: 1,
+              scheduledAt: "2026-09-01T23:00:00.000Z",
+            },
+          ],
+        }),
+      ),
+    ).toThrowError(expect.objectContaining({ status: 409 }));
+  });
+
+  it("reports insufficient capacity instead of returning partial games", () => {
+    expect(() =>
+      generateSchedule(
+        input({
+          playDates: ["2026-09-01"],
+          timeSlots: ["18:00"],
+          courts: [{ id: 1 }],
+        }),
+      ),
+    ).toThrowError(
+      expect.objectContaining({
+        status: 409,
+        message: expect.stringContaining(
+          "Insufficient schedule capacity: 6 matches required",
+        ),
+      }),
+    );
+  });
+});

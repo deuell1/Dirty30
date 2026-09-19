@@ -104,6 +104,35 @@ describe("league route authorization boundary", () => {
         scheduledAt: "2026-08-25T19:00:00.000Z",
       },
     ],
+    [
+      "previews a generated schedule",
+      "post",
+      "/schedule/generator/preview",
+      {
+        format: "SINGLE",
+        venueId: 1,
+        courtIds: [1],
+        firstPlayDate: "2026-08-25",
+        weekdays: [2],
+        timeSlots: ["18:00"],
+        maxMatchesPerTeamPerDate: 1,
+      },
+    ],
+    [
+      "commits a generated schedule",
+      "post",
+      "/schedule/generator/commit",
+      {
+        format: "SINGLE",
+        venueId: 1,
+        courtIds: [1],
+        firstPlayDate: "2026-08-25",
+        weekdays: [2],
+        timeSlots: ["18:00"],
+        maxMatchesPerTeamPerDate: 1,
+        confirm: true,
+      },
+    ],
     ["edits a venue", "patch", "/venues/1", { name: "New venue" }],
     [
       "enters an official score",
@@ -112,14 +141,19 @@ describe("league route authorization boundary", () => {
       { homeScore: 5, awayScore: 4 },
     ],
   ] as const)(
-    "rejects a player before database work when the player %s",
+    "rejects a non-commissioner before database work when the user %s",
     async (_label, method, path, body) => {
-      const response =
-        body === undefined
-          ? await request(app)[method](path)
-          : await request(app)[method](path).send(body);
-      expect(response.status).toBe(403);
-      expect(response.body).toEqual({ error: "Commissioner access required" });
+      for (const role of ["PLAYER", "CAPTAIN"] as const) {
+        state.role = role;
+        const response =
+          body === undefined
+            ? await request(app)[method](path)
+            : await request(app)[method](path).send(body);
+        expect(response.status).toBe(403);
+        expect(response.body).toEqual({
+          error: "Commissioner access required",
+        });
+      }
     },
   );
 

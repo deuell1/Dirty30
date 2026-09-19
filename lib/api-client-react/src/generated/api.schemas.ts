@@ -220,6 +220,104 @@ export interface GameInput {
   scheduledAt: string;
 }
 
+export type ScheduleGeneratorInputFormat = typeof ScheduleGeneratorInputFormat[keyof typeof ScheduleGeneratorInputFormat];
+
+
+export const ScheduleGeneratorInputFormat = {
+  SINGLE: 'SINGLE',
+  DOUBLE: 'DOUBLE',
+} as const;
+
+export type ScheduleGeneratorInputMaxMatchesPerTeamPerDate = typeof ScheduleGeneratorInputMaxMatchesPerTeamPerDate[keyof typeof ScheduleGeneratorInputMaxMatchesPerTeamPerDate];
+
+
+export const ScheduleGeneratorInputMaxMatchesPerTeamPerDate = {
+  NUMBER_1: 1,
+  NUMBER_2: 2,
+} as const;
+
+export interface ScheduleGeneratorInput {
+  format: ScheduleGeneratorInputFormat;
+  /** @minimum 1 */
+  venueId: number;
+  /**
+     * @minItems 1
+     * @items.minimum 1
+     */
+  courtIds: number[];
+  firstPlayDate: string;
+  /**
+     * @minItems 1
+     * @items.minimum 0
+     * @items.maximum 6
+     */
+  weekdays: number[];
+  /**
+     * @minItems 1
+     * @items.pattern ^(?:[01]\d|2[0-3]):[0-5]\d$
+     */
+  timeSlots: string[];
+  maxMatchesPerTeamPerDate?: ScheduleGeneratorInputMaxMatchesPerTeamPerDate;
+}
+
+export type ScheduleGeneratorCommitInput = ScheduleGeneratorInput & {
+  confirm: true;
+  /** @pattern ^[a-f0-9]{64}$ */
+  previewHash: string;
+};
+
+export interface ScheduleGeneratorGame {
+  homeTeamId: number;
+  awayTeamId: number;
+  scheduledAt: string;
+  courtId: number;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  date: string;
+  time: string;
+  round: number;
+}
+
+export type ScheduleGeneratorPreviewFormat = typeof ScheduleGeneratorPreviewFormat[keyof typeof ScheduleGeneratorPreviewFormat];
+
+
+export const ScheduleGeneratorPreviewFormat = {
+  SINGLE: 'SINGLE',
+  DOUBLE: 'DOUBLE',
+} as const;
+
+export type ScheduleGeneratorPreviewGamesPerTeam = {[key: string]: number};
+
+export type ScheduleGeneratorPreviewHomeAway = {[key: string]: {
+  home: number;
+  away: number;
+}};
+
+export type ScheduleGeneratorPreviewByesItem = {
+  round: number;
+  teamId: number;
+};
+
+export interface ScheduleGeneratorPreview {
+  format: ScheduleGeneratorPreviewFormat;
+  /** @pattern ^[a-f0-9]{64}$ */
+  previewHash: string;
+  teamCount: number;
+  teamNames: string[];
+  totalMatches: number;
+  /** @items.pattern ^\d{4}-\d{2}-\d{2}$ */
+  playDatesUsed: string[];
+  gamesPerTeam: ScheduleGeneratorPreviewGamesPerTeam;
+  homeAway: ScheduleGeneratorPreviewHomeAway;
+  byes: ScheduleGeneratorPreviewByesItem[];
+  games: ScheduleGeneratorGame[];
+  warnings: string[];
+}
+
+export interface ScheduleGeneratorCommitResult {
+  createdCount: number;
+  noOp: boolean;
+}
+
 export type PlayerStatus = typeof PlayerStatus[keyof typeof PlayerStatus];
 
 

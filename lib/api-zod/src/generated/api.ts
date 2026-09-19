@@ -442,6 +442,99 @@ export const UpdateGameResponse = zod.object({
 })
 
 
+/**
+ * @summary Preview a deterministic draft schedule
+ */
+
+
+
+export const previewScheduleGeneratorBodyWeekdaysItemMin = 0;
+export const previewScheduleGeneratorBodyWeekdaysItemMax = 6;
+
+
+export const previewScheduleGeneratorBodyTimeSlotsItemRegExp = new RegExp('^(?:[01]\\d|2[0-3]):[0-5]\\d$');
+
+export const previewScheduleGeneratorBodyMaxMatchesPerTeamPerDateDefault = 1;
+
+export const PreviewScheduleGeneratorBody = zod.object({
+  "format": zod.enum(['SINGLE', 'DOUBLE']),
+  "venueId": zod.int().min(1),
+  "courtIds": zod.array(zod.int().min(1)).min(1),
+  "firstPlayDate": zod.coerce.date(),
+  "weekdays": zod.array(zod.int().min(previewScheduleGeneratorBodyWeekdaysItemMin).max(previewScheduleGeneratorBodyWeekdaysItemMax)).min(1),
+  "timeSlots": zod.array(zod.string().regex(previewScheduleGeneratorBodyTimeSlotsItemRegExp)).min(1),
+  "maxMatchesPerTeamPerDate": zod.union([zod.literal(1),zod.literal(2)]).default(previewScheduleGeneratorBodyMaxMatchesPerTeamPerDateDefault)
+})
+
+export const previewScheduleGeneratorResponsePreviewHashRegExp = new RegExp('^[a-f0-9]{64}$');
+export const previewScheduleGeneratorResponsePlayDatesUsedItemRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const previewScheduleGeneratorResponseGamesItemDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const PreviewScheduleGeneratorResponse = zod.object({
+  "format": zod.enum(['SINGLE', 'DOUBLE']),
+  "previewHash": zod.string().regex(previewScheduleGeneratorResponsePreviewHashRegExp),
+  "teamCount": zod.int(),
+  "teamNames": zod.array(zod.string()),
+  "totalMatches": zod.int(),
+  "playDatesUsed": zod.array(zod.string().regex(previewScheduleGeneratorResponsePlayDatesUsedItemRegExp)),
+  "gamesPerTeam": zod.record(zod.string(), zod.int()),
+  "homeAway": zod.record(zod.string(), zod.object({
+  "home": zod.int(),
+  "away": zod.int()
+})),
+  "byes": zod.array(zod.object({
+  "round": zod.int(),
+  "teamId": zod.int()
+})),
+  "games": zod.array(zod.object({
+  "homeTeamId": zod.int(),
+  "awayTeamId": zod.int(),
+  "scheduledAt": zod.coerce.date(),
+  "courtId": zod.int(),
+  "date": zod.string().regex(previewScheduleGeneratorResponseGamesItemDateRegExp),
+  "time": zod.string(),
+  "round": zod.int()
+})),
+  "warnings": zod.array(zod.string())
+})
+
+
+/**
+ * @summary Create a generated schedule as unpublished drafts
+ */
+
+
+
+export const commitScheduleGeneratorBodyOneWeekdaysItemMin = 0;
+export const commitScheduleGeneratorBodyOneWeekdaysItemMax = 6;
+
+
+export const commitScheduleGeneratorBodyOneTimeSlotsItemRegExp = new RegExp('^(?:[01]\\d|2[0-3]):[0-5]\\d$');
+
+export const commitScheduleGeneratorBodyOneMaxMatchesPerTeamPerDateDefault = 1;
+export const commitScheduleGeneratorBodyTwoPreviewHashRegExp = new RegExp('^[a-f0-9]{64}$');
+
+
+export const CommitScheduleGeneratorBody = zod.object({
+  "format": zod.enum(['SINGLE', 'DOUBLE']),
+  "venueId": zod.int().min(1),
+  "courtIds": zod.array(zod.int().min(1)).min(1),
+  "firstPlayDate": zod.coerce.date(),
+  "weekdays": zod.array(zod.int().min(commitScheduleGeneratorBodyOneWeekdaysItemMin).max(commitScheduleGeneratorBodyOneWeekdaysItemMax)).min(1),
+  "timeSlots": zod.array(zod.string().regex(commitScheduleGeneratorBodyOneTimeSlotsItemRegExp)).min(1),
+  "maxMatchesPerTeamPerDate": zod.union([zod.literal(1),zod.literal(2)]).default(commitScheduleGeneratorBodyOneMaxMatchesPerTeamPerDateDefault)
+}).and(zod.object({
+  "confirm": zod.literal(true),
+  "previewHash": zod.string().regex(commitScheduleGeneratorBodyTwoPreviewHashRegExp)
+}))
+
+export const CommitScheduleGeneratorResponse = zod.object({
+  "createdCount": zod.int(),
+  "noOp": zod.boolean()
+})
+
+
 export const PublishGameParams = zod.object({
   "gameId": zod.coerce.number().int()
 })
