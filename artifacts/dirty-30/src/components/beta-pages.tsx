@@ -85,11 +85,11 @@ export function DashboardPage() {
         </span>
         <span>{data?.seasonName}</span>
       </div>
-      <section className="rounded-[24px] bg-[hsl(var(--primary))] p-7 text-[hsl(var(--primary-foreground))] sm:p-10">
+      <section className="rounded-[24px] bg-[hsl(var(--primary))] p-5 text-[hsl(var(--primary-foreground))] sm:p-10">
         <p className="font-mono-custom text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--accent))]">
           {data?.leagueName ?? "Dirty-30"}
         </p>
-        <h1 className="mt-4 font-display text-5xl font-extrabold leading-[.9] tracking-[-.06em]">
+        <h1 className="mt-4 font-display text-4xl font-extrabold leading-[.9] tracking-[-.06em] sm:text-5xl">
           Game day
           <br />
           <span className="text-[hsl(var(--accent))]">starts here.</span>
@@ -218,12 +218,12 @@ export function TeamDetailPage() {
         ← All teams
       </Link>
       <section className={card}>
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
+        <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:flex-wrap">
+          <div className="w-full min-w-0 sm:w-auto">
             <p className="text-xs font-bold uppercase tracking-[.16em] text-[hsl(var(--primary))]">
               Team profile
             </p>
-            <h1 className="mt-2 font-display text-4xl font-extrabold">
+            <h1 className="mt-2 break-words font-display text-3xl font-extrabold sm:text-4xl">
               {data?.name ?? "Team"}
             </h1>
             <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
@@ -233,7 +233,7 @@ export function TeamDetailPage() {
           </div>
           {commissioner && (
             <button
-              className={quietAction}
+              className={`${quietAction} min-h-[44px] w-full sm:w-auto`}
               onClick={() =>
                 setActive.mutate(
                   { teamId, data: { active: !data?.active } },
@@ -260,15 +260,18 @@ export function TeamDetailPage() {
                   },
                 );
             }}
-            className="mt-5 flex gap-2"
+            className="mt-5 flex flex-col gap-2 sm:flex-row"
           >
             <input
               value={rename}
               onChange={(event) => setRename(event.target.value)}
               placeholder="Rename team"
-              className={field.replace("mt-2 ", "")}
+              className={`${field.replace("mt-2 ", "")} min-h-[44px] min-w-0 flex-1`}
             />
-            <button type="submit" className={quietAction}>
+            <button
+              type="submit"
+              className={`${quietAction} min-h-[44px] w-full sm:w-auto`}
+            >
               Save name
             </button>
           </form>
@@ -291,19 +294,22 @@ export function TeamDetailPage() {
               onChange={(event) => setPhone(event.target.value)}
               inputMode="tel"
               placeholder="(312) 555-0123"
-              className={field.replace("mt-2 ", "")}
+              className={`${field.replace("mt-2 ", "")} min-h-[44px] min-w-0 flex-1`}
             />
-            <button className={action} type="submit">
+            <button
+              className={`${action} min-h-[44px] w-full sm:w-auto`}
+              type="submit"
+            >
               Create invite
             </button>
           </form>
           {inviteLink && (
-            <div className="mt-3 flex gap-2 rounded-xl bg-[hsl(var(--muted))] p-3">
+            <div className="mt-3 flex flex-col gap-2 rounded-xl bg-[hsl(var(--muted))] p-3 sm:flex-row sm:items-center">
               <code className="min-w-0 flex-1 break-all text-xs">
                 {inviteLink}
               </code>
               <button
-                className={quietAction}
+                className={`${quietAction} min-h-[44px] w-full sm:min-h-10 sm:w-auto`}
                 onClick={() => void navigator.clipboard.writeText(inviteLink)}
               >
                 Copy
@@ -331,27 +337,32 @@ export function TeamDetailPage() {
         </div>
         <div className="mt-4 divide-y divide-[hsl(var(--border))]">
           {players.map((player) => (
-            <div key={player.id} className="flex items-center gap-3 py-3">
-              <span className="grid h-9 w-9 place-items-center rounded-xl bg-[hsl(var(--muted))] font-bold">
-                {initials(`${player.firstName} ${player.lastName}`)}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="font-bold">
-                  {player.firstName} {player.lastName}
-                </p>
-                <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                  {player.phone ?? "Phone hidden"}
-                </p>
+            <div
+              key={player.id}
+              className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center"
+            >
+              <div className="flex flex-1 items-center gap-3 min-w-0">
+                <span className="grid h-[44px] w-[44px] min-w-[44px] place-items-center rounded-xl bg-[hsl(var(--muted))] font-bold">
+                  {initials(`${player.firstName} ${player.lastName}`)}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold truncate">
+                    {player.firstName} {player.lastName}
+                  </p>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                    {player.phone ?? "Phone hidden"}
+                  </p>
+                </div>
+                <span
+                  className={`rounded-full px-2 py-1 text-[10px] font-bold ${player.status === PlayerStatus.ACTIVE ? "bg-[hsl(var(--primary)/.12)] text-[hsl(var(--primary))]" : "bg-[hsl(var(--accent)/.28)]"}`}
+                >
+                  {player.status}
+                </span>
               </div>
-              <span
-                className={`rounded-full px-2 py-1 text-[10px] font-bold ${player.status === PlayerStatus.ACTIVE ? "bg-[hsl(var(--primary)/.12)] text-[hsl(var(--primary))]" : "bg-[hsl(var(--accent)/.28)]"}`}
-              >
-                {player.status}
-              </span>
               {canManage && player.status === PlayerStatus.PENDING && (
-                <span className="flex gap-1">
+                <span className="flex w-full gap-2 sm:w-auto">
                   <button
-                    className={quietAction}
+                    className={`${quietAction} flex-1 min-h-[44px] px-2 text-xs sm:flex-none sm:min-h-10 sm:px-3`}
                     onClick={() =>
                       regenerate.mutate(
                         { teamId, invitationId: -player.id },
@@ -372,7 +383,7 @@ export function TeamDetailPage() {
                     Regenerate
                   </button>
                   <button
-                    className={quietAction}
+                    className={`${quietAction} flex-1 min-h-[44px] px-2 text-xs sm:flex-none sm:min-h-10 sm:px-3`}
                     onClick={() =>
                       cancel.mutate(
                         { teamId, invitationId: -player.id },
@@ -385,9 +396,9 @@ export function TeamDetailPage() {
                 </span>
               )}
               {commissioner && player.status === PlayerStatus.ACTIVE && (
-                <span className="flex gap-1">
+                <span className="flex w-full gap-2 sm:w-auto">
                   <button
-                    className={quietAction}
+                    className={`${quietAction} flex-1 min-h-[44px] px-2 text-xs sm:flex-none sm:min-h-10 sm:px-3`}
                     onClick={() =>
                       assignCaptain.mutate(
                         { teamId, data: { userId: player.id } },
@@ -398,7 +409,7 @@ export function TeamDetailPage() {
                     Captain
                   </button>
                   <button
-                    className={quietAction}
+                    className={`${quietAction} flex-1 min-h-[44px] px-2 text-xs sm:flex-none sm:min-h-10 sm:px-3`}
                     onClick={() =>
                       remove.mutate(
                         { teamId, userId: player.id },
@@ -425,12 +436,12 @@ export function SchedulePage() {
   const commissioner = profile.data?.role === DashboardRole.COMMISSIONER;
   return (
     <div className="animate-rise">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
+      <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:gap-4">
+        <div className="w-full min-w-0">
           <p className="text-xs font-bold uppercase tracking-[.16em] text-[hsl(var(--primary))]">
             The board
           </p>
-          <h1 className="mt-2 font-display text-4xl font-extrabold">
+          <h1 className="mt-2 font-display text-3xl font-extrabold sm:text-4xl">
             Schedule
           </h1>
           <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
@@ -474,24 +485,28 @@ export function GameDetailPage() {
       >
         ← Schedule
       </Link>
-      <section className="rounded-[24px] bg-[hsl(var(--sidebar))] p-7 text-[hsl(var(--sidebar-foreground))]">
-        <p className="text-center text-xs font-bold uppercase tracking-[.16em] text-[hsl(var(--accent))]">
+      <section className="rounded-[24px] bg-[hsl(var(--sidebar))] p-5 text-[hsl(var(--sidebar-foreground))] sm:p-7">
+        <p className="break-words text-center text-xs font-bold uppercase tracking-[.12em] text-[hsl(var(--accent))] sm:tracking-[.16em]">
           {game.date} · {game.startTime} · {game.venue} / {game.court}
         </p>
-        <div className="mt-7 grid grid-cols-[1fr_auto_1fr] items-center gap-3 text-center">
-          <div>
-            <p className="font-display text-xl font-bold">{game.homeTeam}</p>
+        <div className="mt-6 flex flex-col items-center gap-3 text-center sm:mt-7 sm:grid sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+          <div className="min-w-0">
+            <p className="break-words font-display text-xl font-bold">
+              {game.homeTeam}
+            </p>
           </div>
           <div className="font-mono-custom text-3xl font-bold text-[hsl(var(--accent))]">
             {game.homeScore != null
               ? `${game.homeScore} – ${game.awayScore}`
               : "VS"}
           </div>
-          <div>
-            <p className="font-display text-xl font-bold">{game.awayTeam}</p>
+          <div className="min-w-0">
+            <p className="break-words font-display text-xl font-bold">
+              {game.awayTeam}
+            </p>
           </div>
         </div>
-        <p className="mt-5 text-center text-[10px] font-bold uppercase tracking-[.18em] text-[hsl(var(--sidebar-foreground)/.55)]">
+        <p className="mt-5 text-center text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--sidebar-foreground)/.65)]">
           {!game.published ? "Draft" : game.status.replaceAll("_", " ")}
         </p>
       </section>
@@ -517,7 +532,9 @@ export function ProfilePage() {
       <p className="text-xs font-bold uppercase tracking-[.16em] text-[hsl(var(--primary))]">
         Your league account
       </p>
-      <h1 className="mt-2 font-display text-4xl font-extrabold">Profile</h1>
+      <h1 className="mt-2 font-display text-3xl font-extrabold sm:text-4xl">
+        Profile
+      </h1>
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -537,13 +554,13 @@ export function ProfilePage() {
         }}
         className={`mt-6 space-y-5 ${card}`}
       >
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2">
           <label className="text-sm font-bold">
             First name
             <input
               value={firstName}
               onChange={(event) => setFirstName(event.target.value)}
-              className={field}
+              className={`${field} min-h-[44px]`}
             />
           </label>
           <label className="text-sm font-bold">
@@ -551,7 +568,7 @@ export function ProfilePage() {
             <input
               value={lastName}
               onChange={(event) => setLastName(event.target.value)}
-              className={field}
+              className={`${field} min-h-[44px]`}
             />
           </label>
         </div>
@@ -582,7 +599,10 @@ export function ProfilePage() {
             {errorText(update.error)}
           </p>
         )}
-        <button type="submit" className={action}>
+        <button
+          type="submit"
+          className={`${action} min-h-[44px] w-full sm:w-auto`}
+        >
           Save profile
         </button>
       </form>
@@ -641,7 +661,7 @@ export function InvitationPage() {
         )}
         {acceptedTeamId ? (
           <button
-            className={`${action} mt-5`}
+            className={`${action} mt-5 min-h-[44px] w-full sm:w-auto`}
             onClick={() =>
               void complete(acceptedTeamId).catch(() =>
                 setRefreshError(
@@ -654,7 +674,7 @@ export function InvitationPage() {
           </button>
         ) : (
           <button
-            className={`${action} mt-5`}
+            className={`${action} mt-5 min-h-[44px] w-full sm:w-auto`}
             disabled={accept.isPending}
             onClick={() =>
               token &&
@@ -687,7 +707,7 @@ function GameSummary({ game }: { game: Game }) {
       href={`/schedule/${game.id}`}
       className={`${card} block transition hover:border-[hsl(var(--primary))]`}
     >
-      <div className="flex justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs font-bold uppercase tracking-[.14em] text-[hsl(var(--muted-foreground))]">
           {game.date} · {game.startTime}
         </p>
@@ -695,16 +715,20 @@ function GameSummary({ game }: { game: Game }) {
           {!game.published ? "DRAFT" : game.status.replaceAll("_", " ")}
         </span>
       </div>
-      <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-        <strong>{game.homeTeam}</strong>
-        <span className="font-mono-custom text-lg font-bold">
+      <div className="mt-4 flex flex-col gap-3 sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-center">
+        <strong className="min-w-0 break-words text-center sm:text-left">
+          {game.homeTeam}
+        </strong>
+        <span className="text-center font-mono-custom text-lg font-bold">
           {game.homeScore != null
             ? `${game.homeScore} – ${game.awayScore}`
             : "VS"}
         </span>
-        <strong className="text-right">{game.awayTeam}</strong>
+        <strong className="min-w-0 break-words text-center sm:text-right">
+          {game.awayTeam}
+        </strong>
       </div>
-      <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">
+      <p className="mt-3 text-center text-xs text-[hsl(var(--muted-foreground))] sm:text-left">
         {game.venue} · {game.court}
       </p>
     </Link>

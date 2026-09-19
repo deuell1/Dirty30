@@ -161,17 +161,17 @@ export function ScoreActions({ game }: { game: Game }) {
             <input
               value={reason}
               onChange={(event) => setReason(event.target.value)}
-              className="mt-2 min-h-11 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm"
+              className="mt-2 min-h-[44px] w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm"
               placeholder="Required only if disputing"
             />
           </label>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             <button
               type="button"
               onClick={() =>
                 confirm.mutate({ gameId: game.id }, { onSuccess: refresh })
               }
-              className="min-h-11 rounded-xl bg-[hsl(var(--primary))] px-4 text-sm font-bold text-[hsl(var(--primary-foreground))]"
+              className="min-h-[44px] w-full rounded-xl bg-[hsl(var(--primary))] px-4 text-sm font-bold text-[hsl(var(--primary-foreground))] sm:w-auto"
             >
               Confirm score
             </button>
@@ -184,7 +184,7 @@ export function ScoreActions({ game }: { game: Game }) {
                   { onSuccess: refresh },
                 )
               }
-              className="min-h-11 rounded-xl border border-[hsl(var(--border))] px-4 text-sm font-bold disabled:opacity-50"
+              className="min-h-[44px] w-full rounded-xl border border-[hsl(var(--border))] px-4 text-sm font-bold disabled:opacity-50 sm:w-auto"
             >
               Dispute
             </button>
@@ -197,7 +197,7 @@ export function ScoreActions({ game }: { game: Game }) {
           (game.status === GameStatus.FINAL ||
             (game.status === GameStatus.SCHEDULED && game.published)))) && (
         <form onSubmit={save} className="mt-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-4 sm:grid-cols-2 sm:gap-3">
             <ScoreField
               label={game.homeTeam}
               value={homeScore}
@@ -218,7 +218,7 @@ export function ScoreActions({ game }: { game: Game }) {
           <button
             type="submit"
             disabled={!ready}
-            className="mt-4 min-h-11 w-full rounded-xl bg-[hsl(var(--primary))] px-4 text-sm font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50"
+            className="mt-5 min-h-[44px] w-full rounded-xl bg-[hsl(var(--primary))] px-4 text-sm font-bold text-[hsl(var(--primary-foreground))] disabled:opacity-50"
           >
             {game.status === GameStatus.DISPUTED
               ? "Resolve & finalize score"
@@ -258,14 +258,14 @@ function ScoreField({
 }) {
   return (
     <label className="text-xs font-bold">
-      {label}
+      <span className="block min-w-0 truncate">{label}</span>
       <input
         type="number"
         min="0"
         inputMode="numeric"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-2 min-h-12 w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 font-mono-custom text-xl"
+        className="mt-2 min-h-[48px] w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 font-mono-custom text-xl"
       />
     </label>
   );

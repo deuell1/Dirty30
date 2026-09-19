@@ -269,13 +269,13 @@ export function CommissionerScheduleAdmin() {
       <div className="grid gap-5 lg:grid-cols-2">
         <section className="rounded-2xl bg-[hsl(var(--card))] p-4">
           <h3 className="font-display text-lg font-bold">Venues & courts</h3>
-          <form onSubmit={saveVenue} className="mt-3 grid gap-2 sm:grid-cols-2">
+          <form onSubmit={saveVenue} className="mt-3 grid gap-3 sm:grid-cols-2">
             <label className="text-xs font-bold">
               Venue name
               <input
                 value={venueName}
                 onChange={(event) => setVenueName(event.target.value)}
-                className={fieldClass}
+                className={`${fieldClass} min-h-[44px]`}
                 placeholder="Northside Rec"
               />
             </label>
@@ -284,12 +284,12 @@ export function CommissionerScheduleAdmin() {
               <input
                 value={venueAddress}
                 onChange={(event) => setVenueAddress(event.target.value)}
-                className={fieldClass}
+                className={`${fieldClass} min-h-[44px]`}
                 placeholder="123 Beer League Ave"
               />
             </label>
             <button
-              className={subtleButton}
+              className={`${subtleButton} sm:col-span-2 min-h-[44px]`}
               type="submit"
               disabled={createVenue.isPending}
             >
@@ -305,7 +305,7 @@ export function CommissionerScheduleAdmin() {
                 {editingVenue?.id === venue.id ? (
                   <form
                     onSubmit={saveVenueEdit}
-                    className="grid gap-2 sm:grid-cols-2"
+                    className="grid gap-3 sm:grid-cols-2"
                   >
                     <input
                       aria-label="Edit venue name"
@@ -316,7 +316,7 @@ export function CommissionerScheduleAdmin() {
                           name: event.target.value,
                         })
                       }
-                      className={fieldClass.replace("mt-1 ", "")}
+                      className={`${fieldClass.replace("mt-1 ", "")} min-h-[44px] min-w-0`}
                     />
                     <input
                       aria-label="Edit venue address"
@@ -327,18 +327,18 @@ export function CommissionerScheduleAdmin() {
                           address: event.target.value,
                         })
                       }
-                      className={fieldClass.replace("mt-1 ", "")}
+                      className={`${fieldClass.replace("mt-1 ", "")} min-h-[44px] min-w-0`}
                     />
-                    <div className="flex gap-2">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:col-span-2">
                       <button
-                        className={subtleButton}
+                        className={`${subtleButton} min-h-[44px] w-full sm:w-auto`}
                         type="submit"
                         disabled={updateVenue.isPending}
                       >
                         Save venue
                       </button>
                       <button
-                        className={subtleButton}
+                        className={`${subtleButton} min-h-[44px] w-full sm:w-auto`}
                         type="button"
                         onClick={() => setEditingVenue(undefined)}
                       >
@@ -347,45 +347,47 @@ export function CommissionerScheduleAdmin() {
                     </div>
                   </form>
                 ) : (
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-2">
                     <button
                       type="button"
                       onClick={() => setSelectedVenueId(venue.id)}
-                      className="min-w-0 flex-1 text-left"
+                      className="min-w-0 flex-1 w-full text-left"
                     >
                       <p className="truncate text-sm font-bold">{venue.name}</p>
                       <p className="truncate text-xs text-[hsl(var(--muted-foreground))]">
                         {venue.address || "No address"}
                       </p>
                     </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setEditingVenue({
-                          id: venue.id,
-                          name: venue.name,
-                          address: venue.address ?? "",
-                        })
-                      }
-                      className={subtleButton}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        updateVenue.mutate(
-                          {
-                            venueId: venue.id,
-                            data: { active: !venue.active },
-                          },
-                          { onSuccess: refreshSchedule },
-                        )
-                      }
-                      className={subtleButton}
-                    >
-                      {venue.active ? "Deactivate" : "Activate"}
-                    </button>
+                    <div className="flex w-full gap-2 sm:w-auto">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setEditingVenue({
+                            id: venue.id,
+                            name: venue.name,
+                            address: venue.address ?? "",
+                          })
+                        }
+                        className={`${subtleButton} min-h-[44px] flex-1 sm:flex-none sm:min-h-10`}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateVenue.mutate(
+                            {
+                              venueId: venue.id,
+                              data: { active: !venue.active },
+                            },
+                            { onSuccess: refreshSchedule },
+                          )
+                        }
+                        className={`${subtleButton} min-h-[44px] flex-1 sm:flex-none sm:min-h-10`}
+                      >
+                        {venue.active ? "Deactivate" : "Activate"}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -398,15 +400,18 @@ export function CommissionerScheduleAdmin() {
                 {venueList.find((venue) => venue.id === selectedVenueId)
                   ?.name ?? "venue"}
               </p>
-              <form onSubmit={saveCourt} className="mt-2 flex gap-2">
+              <form
+                onSubmit={saveCourt}
+                className="mt-3 flex flex-col gap-2 sm:flex-row"
+              >
                 <input
                   value={courtName}
                   onChange={(event) => setCourtName(event.target.value)}
-                  className={fieldClass.replace("mt-1 ", "")}
+                  className={`${fieldClass.replace("mt-1 ", "")} min-h-[44px] min-w-0 flex-1`}
                   placeholder="Court 1"
                 />
                 <button
-                  className={subtleButton}
+                  className={`${subtleButton} min-h-[44px] w-full sm:w-auto`}
                   type="submit"
                   disabled={createCourt.isPending}
                 >
@@ -422,7 +427,7 @@ export function CommissionerScheduleAdmin() {
                     {editingCourt?.id === court.id ? (
                       <form
                         onSubmit={saveCourtEdit}
-                        className="flex flex-wrap gap-2"
+                        className="flex flex-col gap-2 sm:flex-row sm:flex-wrap"
                       >
                         <input
                           aria-label="Edit court name"
@@ -433,27 +438,31 @@ export function CommissionerScheduleAdmin() {
                               name: event.target.value,
                             })
                           }
-                          className={fieldClass.replace("mt-1 ", "")}
+                          className={`${fieldClass.replace("mt-1 ", "")} min-h-[44px] min-w-0 flex-1`}
                         />
-                        <button
-                          className={subtleButton}
-                          type="submit"
-                          disabled={updateCourt.isPending}
-                        >
-                          Save court
-                        </button>
-                        <button
-                          className={subtleButton}
-                          type="button"
-                          onClick={() => setEditingCourt(undefined)}
-                        >
-                          Cancel
-                        </button>
+                        <div className="flex w-full gap-2 sm:w-auto">
+                          <button
+                            className={`${subtleButton} min-h-[44px] flex-1 sm:w-auto`}
+                            type="submit"
+                            disabled={updateCourt.isPending}
+                          >
+                            Save court
+                          </button>
+                          <button
+                            className={`${subtleButton} min-h-[44px] flex-1 sm:w-auto`}
+                            type="button"
+                            onClick={() => setEditingCourt(undefined)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
                       </form>
                     ) : (
-                      <div className="flex items-center justify-between gap-2">
-                        <span>{court.name}</span>
-                        <div className="flex gap-2">
+                      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center sm:gap-2">
+                        <span className="min-w-0 break-words font-bold sm:font-normal">
+                          {court.name}
+                        </span>
+                        <div className="flex w-full gap-2 sm:w-auto">
                           <button
                             type="button"
                             onClick={() =>
@@ -462,7 +471,7 @@ export function CommissionerScheduleAdmin() {
                                 name: court.name,
                               })
                             }
-                            className="text-xs font-bold text-[hsl(var(--primary))]"
+                            className="flex min-h-[44px] flex-1 items-center justify-center rounded-lg bg-[hsl(var(--primary)/.1)] text-xs font-bold text-[hsl(var(--primary))] sm:min-h-0 sm:flex-none sm:bg-transparent sm:px-0"
                           >
                             Edit
                           </button>
@@ -477,7 +486,7 @@ export function CommissionerScheduleAdmin() {
                                 { onSuccess: refreshSchedule },
                               )
                             }
-                            className="text-xs font-bold text-[hsl(var(--primary))]"
+                            className="flex min-h-[44px] flex-1 items-center justify-center rounded-lg bg-[hsl(var(--primary)/.1)] text-xs font-bold text-[hsl(var(--primary))] sm:min-h-0 sm:flex-none sm:bg-transparent sm:px-0"
                           >
                             {court.active ? "Deactivate" : "Activate"}
                           </button>
@@ -561,11 +570,11 @@ export function CommissionerScheduleAdmin() {
                     scheduledAt: event.target.value,
                   }))
                 }
-                className={fieldClass}
+                className={`${fieldClass} min-h-[44px]`}
               />
             </label>
             <button
-              className={subtleButton}
+              className={`${subtleButton} min-h-[44px] w-full sm:w-auto mt-2`}
               type="submit"
               disabled={createGame.isPending || updateGame.isPending}
             >
@@ -574,62 +583,64 @@ export function CommissionerScheduleAdmin() {
           </form>
         </section>
       </div>
-      <div className="space-y-2">
+      <div className="space-y-3">
         <h3 className="font-display text-lg font-bold">
           Commissioner schedule
         </h3>
         {gameList.map((game) => (
           <div
             key={game.id}
-            className="flex flex-wrap items-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3 text-sm"
+            className="flex flex-col gap-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 text-sm sm:flex-row sm:flex-wrap sm:items-center sm:gap-2 sm:p-3"
           >
             <div className="min-w-0 flex-1">
-              <p className="font-bold">
+              <p className="break-words font-bold">
                 {game.homeTeam} vs {game.awayTeam}
               </p>
               <p className="text-xs text-[hsl(var(--muted-foreground))]">
                 {game.date} · {game.startTime} · {game.venue} / {game.court}
               </p>
             </div>
-            <span className="rounded-full bg-[hsl(var(--muted))] px-2 py-1 text-[10px] font-bold">
+            <span className="self-start rounded-full bg-[hsl(var(--muted))] px-2 py-1 text-[10px] font-bold sm:self-auto">
               {!game.published ? "DRAFT" : game.status.replaceAll("_", " ")}
             </span>
-            <button
-              type="button"
-              onClick={() => startEdit(game)}
-              className={subtleButton}
-            >
-              Edit
-            </button>
-            {!game.published && (
+            <div className="flex w-full gap-2 sm:w-auto">
               <button
                 type="button"
-                onClick={() =>
-                  publishGame.mutate(
-                    { gameId: game.id },
-                    { onSuccess: refreshSchedule },
-                  )
-                }
-                className={subtleButton}
+                onClick={() => startEdit(game)}
+                className={`${subtleButton} min-h-[44px] flex-1 sm:min-h-10 sm:flex-none`}
               >
-                Publish
+                Edit
               </button>
-            )}
-            {game.status !== GameStatus.FINAL &&
-              game.status !== GameStatus.CANCELLED && (
+              {!game.published && (
                 <button
                   type="button"
                   onClick={() =>
-                    cancelGame.mutate(
+                    publishGame.mutate(
                       { gameId: game.id },
                       { onSuccess: refreshSchedule },
                     )
                   }
-                  className={subtleButton}
+                  className={`${subtleButton} min-h-[44px] flex-1 sm:min-h-10 sm:flex-none`}
                 >
-                  Cancel
+                  Publish
                 </button>
               )}
+              {game.status !== GameStatus.FINAL &&
+                game.status !== GameStatus.CANCELLED && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      cancelGame.mutate(
+                        { gameId: game.id },
+                        { onSuccess: refreshSchedule },
+                      )
+                    }
+                    className={`${subtleButton} min-h-[44px] flex-1 sm:min-h-10 sm:flex-none`}
+                  >
+                    Cancel
+                  </button>
+                )}
+            </div>
           </div>
         ))}
       </div>
@@ -654,7 +665,7 @@ function Select({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className={fieldClass}
+        className={`${fieldClass} min-h-[44px]`}
       >
         <option value="">Choose {label.toLowerCase()}</option>
         {options.map(([id, name]) => (
