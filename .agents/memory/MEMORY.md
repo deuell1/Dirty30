@@ -5,3 +5,4 @@
 - [Dirty-30 test database ownership](dirty30-test-database-ownership.md) — integration verification assumes migrations exclusively own the dedicated test database’s public schema.
 - [Patch-created file newlines](patch-created-file-newlines.md) — new files may need a uniquely anchored explicit final blank line to satisfy Prettier.
 - [Dirty-30 invitation role intent](dirty30-invitation-role-intent.md) — persist role when issuing an invite; only the first live pending commissioner invite to a captainless team is CAPTAIN.
+- [Dirty-30 invitation auth return](dirty30-invitation-auth-return.md) — retain a validated session-scoped invite path until acceptance activates the user; never clear it on a requested redirect.

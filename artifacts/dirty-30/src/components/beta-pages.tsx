@@ -37,7 +37,10 @@ import {
   useUpdateCurrentUser,
   useUpdateTeam,
 } from "@workspace/api-client-react";
-import { refreshAfterInvitationAcceptance } from "./invitation-flow";
+import {
+  clearInvitationPath,
+  refreshAfterInvitationAcceptance,
+} from "./invitation-flow";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
 import { Link, useLocation, useParams } from "wouter";
 import { CommissionerScheduleAdmin } from "./commissioner-schedule";
@@ -717,6 +720,7 @@ export function InvitationPage() {
       return;
     }
     setAcceptedTeamId(null);
+    clearInvitationPath(window.sessionStorage);
     console.info("[invite-diagnostic]", { redirectCompleted: true });
     navigate(`/teams/${teamId}`);
   };

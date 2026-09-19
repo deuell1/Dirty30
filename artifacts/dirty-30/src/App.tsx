@@ -34,7 +34,12 @@ import { ErrorBoundary } from "@/components/error-boundary";
 import { bootstrapQueryOptions } from "@/bootstrap-query";
 import { PhoneAuthScreen } from "@/components/phone-auth";
 import { ScoreActions } from "@/components/score-actions";
-import { pendingSurface } from "@/components/invitation-flow";
+import {
+  invitationResumePath,
+  pendingSurface,
+  preservedInvitationPath,
+  rememberInvitationPath,
+} from "@/components/invitation-flow";
 import {
   LeagueInitializationScreen,
   shouldShowLeagueInitialization,
@@ -427,6 +432,8 @@ function ReviewPersisted() {
 export function AuthBoundary() {
   const { isLoaded, isSignedIn, userId, getToken } = useAuth();
   const [location, setLocation] = useLocation();
+  const invitationStorage =
+    typeof window === "undefined" ? null : window.sessionStorage;
   const profile = useGetCurrentUser({
     query: {
       ...bootstrapQueryOptions,
@@ -449,13 +456,10 @@ export function AuthBoundary() {
     return () => setAuthTokenGetter(null);
   }, [getToken]);
   useEffect(() => {
-    if (!isSignedIn) return;
-    const invite = window.sessionStorage.getItem("dirty30-invitation-return");
-    if (invite && invite !== location) {
-      window.sessionStorage.removeItem("dirty30-invitation-return");
-      setLocation(invite);
-    }
-  }, [isSignedIn, location, setLocation]);
+    if (!isSignedIn || !invitationStorage) return;
+    const invite = invitationResumePath(location, invitationStorage);
+    if (invite) setLocation(invite);
+  }, [invitationStorage, isSignedIn, location, setLocation]);
   if (!isLoaded)
     return (
       <div className="grid min-h-[100dvh] place-items-center">
@@ -463,9 +467,14 @@ export function AuthBoundary() {
       </div>
     );
   if (!isSignedIn) {
-    if (location.startsWith("/invite/"))
-      window.sessionStorage.setItem("dirty30-invitation-return", location);
-    return <PhoneAuthScreen />;
+    if (invitationStorage) rememberInvitationPath(invitationStorage, location);
+    return (
+      <PhoneAuthScreen
+        returnTo={
+          invitationStorage ? preservedInvitationPath(invitationStorage) : null
+        }
+      />
+    );
   }
   if (profile.isLoading)
     return (
@@ -501,8 +510,20 @@ export function AuthBoundary() {
     )
   )
     return <LeagueInitializationScreen status={initialization.data!} />;
+  const preservedInvite = invitationStorage
+    ? preservedInvitationPath(invitationStorage)
+    : null;
+  const resumeInvite = invitationStorage
+    ? invitationResumePath(location, invitationStorage)
+    : null;
+  if (resumeInvite)
+    return (
+      <div className="grid min-h-[100dvh] place-items-center">
+        Returning to your invitation…
+      </div>
+    );
   const surface = profile.data
-    ? pendingSurface(location, profile.data.accessState)
+    ? pendingSurface(location, profile.data.accessState, preservedInvite)
     : "active";
   if (surface === "waiting") return <PendingAccessScreen />;
   if (surface === "invitation") return <InvitationPage />;

@@ -1,0 +1,103 @@
+Fix the Dirty 30 invitation onboarding flow. The issue is that Clerk authentication succeeds but invitation context is lost.
+
+Current reproduction:
+
+1. Captain receives invite link.
+2. User opens invitation route.
+3. User completes Clerk phone signup.
+4. Clerk redirects to:
+   /dashboard
+5. App shows:
+   "Waiting for invitation"
+
+Expected:
+Invite route must survive authentication.
+
+Required flow:
+
+/invite/:token
+↓
+store invitation context
+↓
+Clerk signup/sign-in
+↓
+return to /invite/:token
+↓
+show invitation details
+↓
+accept invitation
+↓
+team membership created
+↓
+redirect /teams/:teamId
+
+Investigate and fix:
+
+1. Invitation route:
+
+* Verify how :token is stored before Clerk authentication.
+* Preserve token across:
+
+  * sign up
+  * sign in
+  * phone verification
+  * session creation
+
+2. Clerk configuration:
+   Review:
+
+* redirectUrl
+* afterSignInUrl
+* afterSignUpUrl
+* fallbackRedirectUrl
+
+Do not globally redirect all users differently. Invitation users should have a special onboarding return path.
+
+3. Frontend persistence:
+   Use an appropriate method:
+
+* Clerk redirect URL with token parameter, OR
+* secure temporary browser storage, OR
+* route state preservation
+
+The solution must work when:
+
+* browser refresh occurs during signup
+* user completes phone verification on a second step
+* existing user signs in
+* new user registers
+
+4. Dashboard behavior:
+   Before showing "Waiting for invitation":
+   check:
+
+* current authenticated user
+* pending invitations associated with that user
+* preserved invitation context
+
+The dashboard should not hide a valid pending invitation.
+
+5. Tests:
+   Add regression tests:
+
+* New user accepts captain invitation after signup.
+* Existing user accepts invitation after login.
+* Invitation token survives redirect.
+* No token results in normal dashboard behavior.
+* Waiting screen only appears when no valid invitation exists.
+
+Do not change:
+
+* invitation role logic
+* captain assignment logic
+* database schema unless required
+* Clerk provider configuration/secrets
+
+Run:
+pnpm verify
+
+Report:
+
+* exact redirect where token was lost
+* files changed
+* test results.

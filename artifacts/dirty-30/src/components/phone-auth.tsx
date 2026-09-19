@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useClerk } from "@clerk/react";
 import { useSignIn, useSignUp } from "@clerk/react/legacy";
 import { ArrowLeft, ArrowRight, RefreshCw, ShieldCheck } from "lucide-react";
+import { useLocation } from "wouter";
 import { normalizePhoneForAuth } from "./phone-flow";
 
 type Flow = "signIn" | "signUp";
@@ -20,10 +21,11 @@ function clerkMessage(error: unknown) {
   return "We could not verify that code. Check it and try again.";
 }
 
-export function PhoneAuthScreen() {
+export function PhoneAuthScreen({ returnTo }: { returnTo?: string | null }) {
   const { isLoaded: signInLoaded, signIn } = useSignIn();
   const { isLoaded: signUpLoaded, signUp } = useSignUp();
   const { setActive } = useClerk();
+  const [, navigate] = useLocation();
   const [flow, setFlow] = useState<Flow>("signIn");
   const [stage, setStage] = useState<Stage>("phone");
   const [phone, setPhone] = useState("");
@@ -103,6 +105,7 @@ export function PhoneAuthScreen() {
         );
       }
       await setActive({ session: attempt.createdSessionId });
+      if (returnTo) navigate(returnTo);
     } catch (caught) {
       setError(clerkMessage(caught));
     } finally {
