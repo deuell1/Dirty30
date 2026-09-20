@@ -21,6 +21,15 @@ if (process.env.NODE_ENV === "production") {
   }
 }
 
+if (process.env.NODE_ENV === "development") {
+  const required = ["DATABASE_URL", "CLERK_DEVELOPMENT_SECRET_KEY"];
+  const missing = required.filter((name) => !process.env[name]?.trim());
+  if (missing.length)
+    throw new Error(
+      `Development configuration is missing required environment variable names: ${missing.join(", ")}`,
+    );
+}
+
 const rawPort = process.env["PORT"];
 
 if (!rawPort) {

@@ -9,7 +9,19 @@ import { sanitizeRequestPath } from "./lib/requestPath";
 
 const app: Express = express();
 const isProduction = process.env.NODE_ENV === "production";
+const isDevelopment = process.env.NODE_ENV === "development";
 const productionOrigin = process.env.APP_ORIGIN;
+const clerkSecretKey = isProduction
+  ? process.env.CLERK_SECRET_KEY
+  : isDevelopment
+    ? process.env.CLERK_DEVELOPMENT_SECRET_KEY
+    : undefined;
+
+if (isDevelopment && !clerkSecretKey?.trim()) {
+  throw new Error(
+    "CLERK_DEVELOPMENT_SECRET_KEY is required for the development API.",
+  );
+}
 
 app.disable("etag");
 
@@ -38,7 +50,11 @@ app.use(
   ),
 );
 app.use("/api", healthRouter);
-app.use(clerkMiddleware());
+app.use(
+  clerkSecretKey
+    ? clerkMiddleware({ secretKey: clerkSecretKey })
+    : clerkMiddleware(),
+);
 app.use("/api", (req, res, next) => {
   delete req.headers["if-none-match"];
   delete req.headers["if-modified-since"];

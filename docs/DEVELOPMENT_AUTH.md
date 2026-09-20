@@ -6,7 +6,26 @@ production league.
 
 ## Development Clerk application
 
-Create or use a separate Clerk application for development. Enable:
+Create or use a separate external Clerk application for development. The
+development application must have its own test/development key pair and its
+own user store. Do not copy values from the production application.
+
+In the Clerk dashboard for the external account, open the development
+application and obtain:
+
+- the development publishable key (`pk_test_...`);
+- the matching development secret key (`sk_test_...`).
+
+Store them in Replit Secrets as:
+
+- `VITE_CLERK_DEVELOPMENT_PUBLISHABLE_KEY`;
+- `CLERK_DEVELOPMENT_SECRET_KEY`.
+
+The application selects these names only when the frontend/API runs in
+development. Production continues to use `VITE_CLERK_PUBLISHABLE_KEY` and
+`CLERK_SECRET_KEY`.
+
+Enable in the development application:
 
 - phone number sign-up;
 - phone number sign-in;
@@ -23,9 +42,15 @@ active.
 Add the domains used by the development preview to the development Clerk
 application:
 
-- the current Replit development domain from `REPLIT_DEV_DOMAIN`;
-- `http://localhost:5173` when running Vite locally;
-- the local API origin if the Clerk dashboard requests one.
+- `https://79f49f4e-ea3c-45da-8fce-c0b4301437a7-00-2onhm0tj7m7gk.worf.replit.dev`;
+- `http://localhost:5173`;
+- `http://localhost:3000` if using a different local frontend port;
+- the matching API origin only if the Clerk dashboard requires a separate
+  origin entry. Dirty-30 normally serves the API under the same origin at
+  `/api`.
+
+The Replit preview hostname can change. Check `REPLIT_DEV_DOMAIN` before
+creating a new preview-specific allowed-origin entry.
 
 Do not add the production domain to the development application. The
 production external Clerk application remains restricted to
@@ -33,18 +58,21 @@ production external Clerk application remains restricted to
 
 ## Required development variables
 
-Set these in the development environment. Keep real values in Replit Secrets
-or local environment configuration; never commit them.
+Set the development-specific values in Replit Secrets or local environment
+configuration; never commit them. Keep the production values in the
+production environment and do not reuse them in preview.
 
-| Variable                       | Purpose                                           |
-| ------------------------------ | ------------------------------------------------- |
-| `DATABASE_URL`                 | Development PostgreSQL connection                 |
-| `SESSION_SECRET`               | Development session/signing secret                |
-| `CLERK_PUBLISHABLE_KEY`        | Server-side Clerk configuration when needed       |
-| `CLERK_SECRET_KEY`             | API server Clerk client                           |
-| `VITE_CLERK_PUBLISHABLE_KEY`   | Browser Clerk publishable key                     |
-| `BOOTSTRAP_COMMISSIONER_PHONE` | Development commissioner phone, matching the seed |
-| `APP_ORIGIN`                   | Required only for production API CORS validation  |
+| Variable                                 | Purpose                                           |
+| ---------------------------------------- | ------------------------------------------------- |
+| `DATABASE_URL`                           | Development PostgreSQL connection                 |
+| `SESSION_SECRET`                         | Development session/signing secret                |
+| `VITE_CLERK_DEVELOPMENT_PUBLISHABLE_KEY` | Development browser publishable key               |
+| `CLERK_DEVELOPMENT_SECRET_KEY`           | Development API Clerk secret key                  |
+| `CLERK_PUBLISHABLE_KEY`                  | Production publishable key, unchanged             |
+| `CLERK_SECRET_KEY`                       | Production secret key, unchanged                  |
+| `VITE_CLERK_PUBLISHABLE_KEY`             | Production browser key, unchanged                 |
+| `BOOTSTRAP_COMMISSIONER_PHONE`           | Development commissioner phone, matching the seed |
+| `APP_ORIGIN`                             | Required only for production API CORS validation  |
 
 `TEST_DATABASE_URL` is separate and is reserved for destructive PostgreSQL
 integration tests. It must never equal `DATABASE_URL`.
