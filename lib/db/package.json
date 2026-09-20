@@ -14,7 +14,8 @@
     "migrate:test": "drizzle-kit migrate --config ./drizzle.test.config.ts",
     "test:connection": "tsx ./src/checkTestDatabase.ts",
     "generate": "drizzle-kit generate --config ./drizzle.config.ts",
-    "seed": "tsx ./src/seed.ts"
+    "seed": "NODE_ENV=development tsx ./src/seed.ts",
+    "seed:development": "NODE_ENV=development tsx ./src/seed.ts"
   },
   "dependencies": {
     "drizzle-orm": "catalog:",

@@ -50,6 +50,13 @@
       "when": 1789855302352,
       "tag": "0006_amused_cardiac",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789866160823,
+      "tag": "0007_reconcile_schedule_week_objects",
+      "breakpoints": true
     }
   ]
 }
