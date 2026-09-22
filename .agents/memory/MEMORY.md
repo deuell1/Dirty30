@@ -7,3 +7,4 @@
 - [Dirty-30 invitation role intent](dirty30-invitation-role-intent.md) — persist role when issuing an invite; only the first live pending commissioner invite to a captainless team is CAPTAIN.
 - [Dirty-30 invitation auth return](dirty30-invitation-auth-return.md) — retain a validated session-scoped invite path until acceptance activates the user; never clear it on a requested redirect.
 - [Dirty-30 canonical schedule rounds](dirty30-canonical-schedule-rounds.md) — overlapping calendar ranges are valid; commissioner writes must identify the intended canonical week ID.
+- [Dirty-30 schedule-week referenced key](dirty30-schedule-week-referenced-key.md) — composite schedule-week FKs need an explicit unique constraint, not only a matching index.

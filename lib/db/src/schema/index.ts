@@ -10,6 +10,7 @@ import {
   serial,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   index,
   varchar,
@@ -219,7 +220,7 @@ export const scheduleWeeks = pgTable(
       table.seasonId,
       table.weekNumber,
     ),
-    uniqueIndex("schedule_weeks_id_season").on(table.id, table.seasonId),
+    unique("schedule_weeks_id_season_unique").on(table.id, table.seasonId),
     check("schedule_weeks_positive_week", sql`${table.weekNumber} > 0`),
     check(
       "schedule_weeks_valid_dates",
