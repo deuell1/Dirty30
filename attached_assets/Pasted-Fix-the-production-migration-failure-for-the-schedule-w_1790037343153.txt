@@ -1,0 +1,65 @@
+Fix the production migration failure for the schedule-week composite foreign key.
+
+Current failure:
+
+ALTER TABLE "games"
+ADD CONSTRAINT "games_schedule_week_season_fk"
+FOREIGN KEY ("schedule_week_id","season_id")
+REFERENCES "public"."schedule_weeks"("id","season_id")
+ON DELETE restrict
+ON UPDATE no action;
+
+PostgreSQL error:
+there is no unique constraint matching given keys for referenced table "schedule_weeks"
+
+Root cause:
+The composite foreign key references (schedule_weeks.id, schedule_weeks.season_id), but schedule_weeks does not currently have a UNIQUE constraint/index covering that exact column pair.
+
+Required fix:
+
+1. Inspect the current schedule_weeks schema and migration history.
+
+2. Add a composite unique constraint/index on:
+   (id, season_id)
+
+Prefer the constraint/index ordering and naming convention already used by the project.
+
+3. Keep the composite foreign key:
+   games(schedule_week_id, season_id)
+   →
+   schedule_weeks(id, season_id)
+
+Do NOT remove or weaken this referential-integrity constraint.
+
+4. Apply the same relationship for team_byes if the current schema defines the equivalent composite relationship.
+
+5. Make the migration safe and deterministic:
+
+* Do not delete production games.
+* Do not delete schedule weeks.
+* Do not change existing dates, scores, teams, or statuses.
+* Do not reset the database.
+* Do not modify Clerk or authentication.
+
+6. Before applying the production migration:
+
+* Run the migration against the development database.
+* Run it against a clean isolated PostgreSQL database.
+* Verify existing seeded games and bye records still resolve to their schedule weeks.
+* Verify cross-season schedule-week references are rejected.
+
+7. Run:
+   pnpm verify
+
+8. Report:
+
+* exact migration changed
+* exact unique constraint/index added
+* whether games and team_byes use the composite FK
+* development migration result
+* clean-database migration result
+* integration test results
+* confirmation that no production data was modified during diagnosis.
+
+Important:
+Do not simply drop schedule_week_id, season_id, or the composite foreign key to bypass the error. The goal is to correct the referenced-key definition while preserving the intended season integrity.
